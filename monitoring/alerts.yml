@@ -1,0 +1,76 @@
+groups:
+   - name: nixploit
+     rules:
+        - alert: NixploitJobFailed
+          expr: |
+             (nixploit_job_success == 0 and on (instance, job) nixploit_job_running == 0)
+             or
+             (nixploit_job_running == 1 and on (instance, job)
+              time() - nixploit_last_attempt_timestamp_seconds > 6 * 60 * 60)
+          for: 5m
+          labels:
+             severity: warning
+          annotations:
+             summary: Nixploit could not complete its latest job on {{ $labels.instance }}
+             description: The job failed or exceeded its six hour limit. Previous findings remain available.
+
+        - alert: NixploitUpdateFailed
+          expr: nixploit_update_success == 0 and on (instance, job) nixploit_job_running == 0
+          for: 5m
+          labels:
+             severity: warning
+          annotations:
+             summary: Nixploit could not update advisory feeds on {{ $labels.instance }}
+             description: Scans may still complete using cached advisory data.
+
+        - alert: NixploitMetricsMissing
+          expr: nixploit_enabled == 1 unless on (instance, job) nixploit_job_running
+          for: 30h
+          labels:
+             severity: warning
+          annotations:
+             summary: Nixploit has no job status on {{ $labels.instance }}
+             description: Scanning is enabled but no attempt status has appeared within 30 hours.
+
+        - alert: NixploitFeedMetricsMissing
+          expr: |
+             (nixploit_enabled == 1
+              and on (instance, job) nixploit_scan_success == 1
+              and on (instance, job) nixploit_job_running == 0)
+             unless on (instance, job) nixploit_feed_checked_timestamp_seconds
+          for: 5m
+          labels:
+             severity: warning
+          annotations:
+             summary: Nixploit has no active feed checks on {{ $labels.instance }}
+             description: The saved scan has no active feed freshness data. Complete a feed update or import.
+
+        - alert: NixploitScanStale
+          expr: time() - nixploit_last_success_timestamp_seconds > 48 * 60 * 60
+          for: 5m
+          labels:
+             severity: warning
+          annotations:
+             summary: Nixploit has no recent completed scan on {{ $labels.instance }}
+             description: The last successful scan is more than 48 hours old.
+
+        - alert: NixploitFeedStale
+          expr: |
+             (time() - nixploit_last_update_success_timestamp_seconds > 48 * 60 * 60)
+             or
+             (time() - min by (instance, job) (nixploit_feed_checked_timestamp_seconds) > 48 * 60 * 60)
+          for: 5m
+          labels:
+             severity: warning
+          annotations:
+             summary: Nixploit advisory feeds are stale on {{ $labels.instance }}
+             description: A feed check or complete update is more than 48 hours old.
+
+        - alert: NixploitKnownExploited
+          expr: nixploit_known_exploited_findings{bucket="affected"} > 0
+          for: 5m
+          labels:
+             severity: critical
+          annotations:
+             summary: Nixploit found known exploited CVE matches on {{ $labels.instance }}
+             description: Review affected findings for applicability to the installed packages.

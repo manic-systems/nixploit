@@ -1,0 +1,1447 @@
+{
+   "uid": "nixploit",
+   "title": "Nixploit",
+   "description": "Nix system vulnerability findings with separate uncertainty and suppression views. Findings remain available after failures. Check scan and feed freshness before interpreting saved results.",
+   "tags": [
+      "nix",
+      "security",
+      "nixploit"
+   ],
+   "timezone": "browser",
+   "schemaVersion": 39,
+   "version": 1,
+   "editable": true,
+   "refresh": "1m",
+   "time": {
+      "from": "now-7d",
+      "to": "now"
+   },
+   "timepicker": {},
+   "templating": {
+      "list": [
+         {
+            "name": "datasource",
+            "label": "Prometheus",
+            "type": "datasource",
+            "query": "prometheus",
+            "refresh": 1,
+            "regex": "",
+            "options": []
+         },
+         {
+            "name": "instance",
+            "label": "Host",
+            "type": "query",
+            "datasource": {
+               "type": "prometheus",
+               "uid": "${datasource}"
+            },
+            "query": {
+               "query": "label_values(nixploit_enabled, instance)",
+               "refId": "StandardVariableQuery"
+            },
+            "refresh": 1,
+            "sort": 1,
+            "multi": true,
+            "includeAll": true,
+            "allValue": ".*",
+            "current": {
+               "text": "All",
+               "value": "$__all"
+            },
+            "options": []
+         },
+         {
+            "name": "bucket",
+            "label": "Table bucket",
+            "type": "custom",
+            "query": "affected,unknown,suppressed",
+            "multi": true,
+            "includeAll": true,
+            "allValue": "affected|unknown|suppressed",
+            "current": {
+               "text": [
+                  "affected"
+               ],
+               "value": [
+                  "affected"
+               ]
+            },
+            "options": [
+               {
+                  "selected": true,
+                  "text": "affected",
+                  "value": "affected"
+               },
+               {
+                  "selected": false,
+                  "text": "unknown",
+                  "value": "unknown"
+               },
+               {
+                  "selected": false,
+                  "text": "suppressed",
+                  "value": "suppressed"
+               }
+            ]
+         }
+      ]
+   },
+   "panels": [
+      {
+         "id": 1,
+         "type": "stat",
+         "title": "Latest scan job",
+         "description": "Shows failed, missing, running or successful jobs across selected hosts. Saved findings remain visible after an unsuccessful attempt.",
+         "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+         },
+         "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 0,
+            "y": 0
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "none",
+               "decimals": 0,
+               "min": 0,
+               "noValue": "No data",
+               "color": {
+                  "mode": "thresholds"
+               },
+               "mappings": [
+                  {
+                     "type": "value",
+                     "options": {
+                        "0": {
+                           "color": "red",
+                           "text": "Failed"
+                        },
+                        "1": {
+                           "color": "orange",
+                           "text": "No status"
+                        },
+                        "2": {
+                           "color": "blue",
+                           "text": "Running"
+                        },
+                        "3": {
+                           "color": "green",
+                           "text": "Successful"
+                        }
+                     }
+                  }
+               ],
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                     {
+                        "color": "red",
+                        "value": null
+                     },
+                     {
+                        "color": "green",
+                        "value": 1
+                     }
+                  ]
+               }
+            },
+            "overrides": []
+         },
+         "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+               "calcs": [
+                  "lastNotNull"
+               ],
+               "fields": "",
+               "values": false
+            },
+            "textMode": "value",
+            "wideLayout": true
+         },
+         "targets": [
+            {
+               "refId": "A",
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "editorMode": "code",
+               "expr": "min((3 * nixploit_job_success{instance=~\"${instance:regex}\"} + 2 * nixploit_job_running{instance=~\"${instance:regex}\"}) or on (instance, job) nixploit_enabled{instance=~\"${instance:regex}\"})",
+               "instant": true,
+               "range": false,
+               "format": "time_series"
+            }
+         ]
+      },
+      {
+         "id": 2,
+         "type": "stat",
+         "title": "Latest feed update",
+         "description": "A failure on any selected host turns this panel red. Scans may still use the previous cached feeds.",
+         "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+         },
+         "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 6,
+            "y": 0
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "none",
+               "decimals": 0,
+               "min": 0,
+               "noValue": "No data",
+               "color": {
+                  "mode": "thresholds"
+               },
+               "mappings": [
+                  {
+                     "type": "value",
+                     "options": {
+                        "0": {
+                           "color": "red",
+                           "text": "Failed"
+                        },
+                        "1": {
+                           "color": "orange",
+                           "text": "No status"
+                        },
+                        "2": {
+                           "color": "blue",
+                           "text": "Updating"
+                        },
+                        "3": {
+                           "color": "green",
+                           "text": "Successful"
+                        }
+                     }
+                  }
+               ],
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                     {
+                        "color": "red",
+                        "value": null
+                     },
+                     {
+                        "color": "green",
+                        "value": 1
+                     }
+                  ]
+               }
+            },
+            "overrides": []
+         },
+         "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+               "calcs": [
+                  "lastNotNull"
+               ],
+               "fields": "",
+               "values": false
+            },
+            "textMode": "value",
+            "wideLayout": true
+         },
+         "targets": [
+            {
+               "refId": "A",
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "editorMode": "code",
+               "expr": "min((3 * nixploit_update_success{instance=~\"${instance:regex}\"} + 2 * nixploit_job_running{instance=~\"${instance:regex}\"} * (1 - nixploit_update_success{instance=~\"${instance:regex}\"})) or on (instance, job) nixploit_enabled{instance=~\"${instance:regex}\"})",
+               "instant": true,
+               "range": false,
+               "format": "time_series"
+            }
+         ]
+      },
+      {
+         "id": 3,
+         "type": "stat",
+         "title": "Oldest successful scan",
+         "description": "Time since the oldest successful scan among selected hosts. Daily scans warn after 26 hours and turn red after 48 hours. Adjust these thresholds if your schedule differs.",
+         "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+         },
+         "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 12,
+            "y": 0
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "dtdurations",
+               "decimals": 0,
+               "min": 0,
+               "noValue": "No data",
+               "color": {
+                  "mode": "thresholds"
+               },
+               "mappings": [],
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                     {
+                        "color": "green",
+                        "value": null
+                     },
+                     {
+                        "color": "orange",
+                        "value": 93600
+                     },
+                     {
+                        "color": "red",
+                        "value": 172800
+                     }
+                  ]
+               }
+            },
+            "overrides": []
+         },
+         "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+               "calcs": [
+                  "lastNotNull"
+               ],
+               "fields": "",
+               "values": false
+            },
+            "textMode": "value",
+            "wideLayout": true
+         },
+         "targets": [
+            {
+               "refId": "A",
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "editorMode": "code",
+               "expr": "max(time() - nixploit_last_success_timestamp_seconds{instance=~\"${instance:regex}\"})",
+               "instant": true,
+               "range": false,
+               "format": "time_series"
+            }
+         ]
+      },
+      {
+         "id": 4,
+         "type": "stat",
+         "title": "Oldest successful feed update",
+         "description": "Time since the oldest successful feed update among selected hosts. Daily updates warn after 26 hours and turn red after 48 hours. Adjust these thresholds if your schedule differs.",
+         "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+         },
+         "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 18,
+            "y": 0
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "dtdurations",
+               "decimals": 0,
+               "min": 0,
+               "noValue": "No data",
+               "color": {
+                  "mode": "thresholds"
+               },
+               "mappings": [],
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                     {
+                        "color": "green",
+                        "value": null
+                     },
+                     {
+                        "color": "orange",
+                        "value": 93600
+                     },
+                     {
+                        "color": "red",
+                        "value": 172800
+                     }
+                  ]
+               }
+            },
+            "overrides": []
+         },
+         "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+               "calcs": [
+                  "lastNotNull"
+               ],
+               "fields": "",
+               "values": false
+            },
+            "textMode": "value",
+            "wideLayout": true
+         },
+         "targets": [
+            {
+               "refId": "A",
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "editorMode": "code",
+               "expr": "max(time() - nixploit_last_update_success_timestamp_seconds{instance=~\"${instance:regex}\"})",
+               "instant": true,
+               "range": false,
+               "format": "time_series"
+            }
+         ]
+      },
+      {
+         "id": 5,
+         "type": "stat",
+         "title": "Affected",
+         "description": "Distinct package, version and CVE findings summed across selected hosts. These findings determine the scanner exit status.",
+         "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+         },
+         "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 0,
+            "y": 4
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "short",
+               "decimals": 0,
+               "min": 0,
+               "noValue": "No data",
+               "color": {
+                  "mode": "thresholds"
+               },
+               "mappings": [],
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                     {
+                        "color": "green",
+                        "value": null
+                     },
+                     {
+                        "color": "red",
+                        "value": 1
+                     }
+                  ]
+               }
+            },
+            "overrides": []
+         },
+         "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+               "calcs": [
+                  "lastNotNull"
+               ],
+               "fields": "",
+               "values": false
+            },
+            "textMode": "value",
+            "wideLayout": true
+         },
+         "targets": [
+            {
+               "refId": "A",
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "editorMode": "code",
+               "expr": "sum(nixploit_findings{instance=~\"${instance:regex}\",bucket=\"affected\"})",
+               "instant": true,
+               "range": false,
+               "format": "time_series"
+            }
+         ]
+      },
+      {
+         "id": 6,
+         "type": "stat",
+         "title": "Unknown",
+         "description": "Product matches with unresolved version evidence. Review these separately from confirmed affected ranges.",
+         "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+         },
+         "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 6,
+            "y": 4
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "short",
+               "decimals": 0,
+               "min": 0,
+               "noValue": "No data",
+               "color": {
+                  "mode": "thresholds"
+               },
+               "mappings": [],
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                     {
+                        "color": "green",
+                        "value": null
+                     },
+                     {
+                        "color": "orange",
+                        "value": 1
+                     }
+                  ]
+               }
+            },
+            "overrides": []
+         },
+         "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+               "calcs": [
+                  "lastNotNull"
+               ],
+               "fields": "",
+               "values": false
+            },
+            "textMode": "value",
+            "wideLayout": true
+         },
+         "targets": [
+            {
+               "refId": "A",
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "editorMode": "code",
+               "expr": "sum(nixploit_findings{instance=~\"${instance:regex}\",bucket=\"unknown\"})",
+               "instant": true,
+               "range": false,
+               "format": "time_series"
+            }
+         ]
+      },
+      {
+         "id": 7,
+         "type": "stat",
+         "title": "Suppressed",
+         "description": "Findings suppressed by configured rules, summed across selected hosts.",
+         "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+         },
+         "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 12,
+            "y": 4
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "short",
+               "decimals": 0,
+               "min": 0,
+               "noValue": "No data",
+               "color": {
+                  "mode": "thresholds"
+               },
+               "mappings": [],
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                     {
+                        "color": "blue",
+                        "value": null
+                     }
+                  ]
+               }
+            },
+            "overrides": []
+         },
+         "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+               "calcs": [
+                  "lastNotNull"
+               ],
+               "fields": "",
+               "values": false
+            },
+            "textMode": "value",
+            "wideLayout": true
+         },
+         "targets": [
+            {
+               "refId": "A",
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "editorMode": "code",
+               "expr": "sum(nixploit_findings{instance=~\"${instance:regex}\",bucket=\"suppressed\"})",
+               "instant": true,
+               "range": false,
+               "format": "time_series"
+            }
+         ]
+      },
+      {
+         "id": 8,
+         "type": "stat",
+         "title": "Affected and known exploited",
+         "description": "Affected package, version and CVE findings whose CVEs appear in the known exploited catalog. A CVE can affect more than one package or host.",
+         "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+         },
+         "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 18,
+            "y": 4
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "short",
+               "decimals": 0,
+               "min": 0,
+               "noValue": "No data",
+               "color": {
+                  "mode": "thresholds"
+               },
+               "mappings": [],
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                     {
+                        "color": "green",
+                        "value": null
+                     },
+                     {
+                        "color": "red",
+                        "value": 1
+                     }
+                  ]
+               }
+            },
+            "overrides": []
+         },
+         "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+               "calcs": [
+                  "lastNotNull"
+               ],
+               "fields": "",
+               "values": false
+            },
+            "textMode": "value",
+            "wideLayout": true
+         },
+         "targets": [
+            {
+               "refId": "A",
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "editorMode": "code",
+               "expr": "sum(nixploit_known_exploited_findings{instance=~\"${instance:regex}\",bucket=\"affected\"})",
+               "instant": true,
+               "range": false,
+               "format": "time_series"
+            }
+         ]
+      },
+      {
+         "id": 9,
+         "type": "timeseries",
+         "title": "Findings over time",
+         "description": "Counts from each completed scan remain in place until a later scan succeeds. Use the status and age panels to detect failed or stale collection.",
+         "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 16,
+            "x": 0,
+            "y": 8
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "short",
+               "min": 0,
+               "decimals": 0,
+               "color": {
+                  "mode": "palette-classic"
+               },
+               "custom": {
+                  "drawStyle": "line",
+                  "lineInterpolation": "stepAfter",
+                  "lineWidth": 2,
+                  "fillOpacity": 10,
+                  "showPoints": "never",
+                  "spanNulls": false,
+                  "stacking": {
+                     "mode": "none",
+                     "group": "A"
+                  }
+               }
+            },
+            "overrides": [
+               {
+                  "matcher": {
+                     "id": "byName",
+                     "options": "affected"
+                  },
+                  "properties": [
+                     {
+                        "id": "color",
+                        "value": {
+                           "mode": "fixed",
+                           "fixedColor": "red"
+                        }
+                     }
+                  ]
+               },
+               {
+                  "matcher": {
+                     "id": "byName",
+                     "options": "unknown"
+                  },
+                  "properties": [
+                     {
+                        "id": "color",
+                        "value": {
+                           "mode": "fixed",
+                           "fixedColor": "orange"
+                        }
+                     }
+                  ]
+               },
+               {
+                  "matcher": {
+                     "id": "byName",
+                     "options": "suppressed"
+                  },
+                  "properties": [
+                     {
+                        "id": "color",
+                        "value": {
+                           "mode": "fixed",
+                           "fixedColor": "blue"
+                        }
+                     }
+                  ]
+               }
+            ]
+         },
+         "options": {
+            "legend": {
+               "displayMode": "list",
+               "placement": "bottom",
+               "showLegend": true
+            },
+            "tooltip": {
+               "mode": "multi",
+               "sort": "desc"
+            }
+         },
+         "targets": [
+            {
+               "refId": "A",
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "editorMode": "code",
+               "expr": "sum by (bucket) (nixploit_findings{instance=~\"${instance:regex}\"})",
+               "instant": false,
+               "range": true,
+               "format": "time_series",
+               "legendFormat": "{{bucket}}"
+            }
+         ]
+      },
+      {
+         "id": 10,
+         "type": "bargauge",
+         "title": "Affected by severity",
+         "description": "Unscored findings remain visible as a separate severity. Counts include each affected package, version and CVE per host.",
+         "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 16,
+            "y": 8
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "short",
+               "decimals": 0,
+               "min": 0,
+               "color": {
+                  "mode": "palette-classic"
+               }
+            },
+            "overrides": [
+               {
+                  "matcher": {
+                     "id": "byName",
+                     "options": "critical"
+                  },
+                  "properties": [
+                     {
+                        "id": "color",
+                        "value": {
+                           "mode": "fixed",
+                           "fixedColor": "dark-red"
+                        }
+                     }
+                  ]
+               },
+               {
+                  "matcher": {
+                     "id": "byName",
+                     "options": "high"
+                  },
+                  "properties": [
+                     {
+                        "id": "color",
+                        "value": {
+                           "mode": "fixed",
+                           "fixedColor": "red"
+                        }
+                     }
+                  ]
+               },
+               {
+                  "matcher": {
+                     "id": "byName",
+                     "options": "medium"
+                  },
+                  "properties": [
+                     {
+                        "id": "color",
+                        "value": {
+                           "mode": "fixed",
+                           "fixedColor": "orange"
+                        }
+                     }
+                  ]
+               },
+               {
+                  "matcher": {
+                     "id": "byName",
+                     "options": "low"
+                  },
+                  "properties": [
+                     {
+                        "id": "color",
+                        "value": {
+                           "mode": "fixed",
+                           "fixedColor": "blue"
+                        }
+                     }
+                  ]
+               },
+               {
+                  "matcher": {
+                     "id": "byName",
+                     "options": "none"
+                  },
+                  "properties": [
+                     {
+                        "id": "color",
+                        "value": {
+                           "mode": "fixed",
+                           "fixedColor": "green"
+                        }
+                     }
+                  ]
+               },
+               {
+                  "matcher": {
+                     "id": "byName",
+                     "options": "unscored"
+                  },
+                  "properties": [
+                     {
+                        "id": "color",
+                        "value": {
+                           "mode": "fixed",
+                           "fixedColor": "gray"
+                        }
+                     }
+                  ]
+               }
+            ]
+         },
+         "options": {
+            "displayMode": "basic",
+            "orientation": "horizontal",
+            "showUnfilled": true,
+            "reduceOptions": {
+               "calcs": [
+                  "lastNotNull"
+               ],
+               "fields": "",
+               "values": false
+            }
+         },
+         "targets": [
+            {
+               "refId": "A",
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "editorMode": "code",
+               "expr": "sum by (severity) (nixploit_findings{instance=~\"${instance:regex}\",bucket=\"affected\"})",
+               "instant": true,
+               "range": false,
+               "format": "time_series",
+               "legendFormat": "{{severity}}"
+            }
+         ]
+      },
+      {
+         "id": 11,
+         "type": "stat",
+         "title": "Scanned packages",
+         "description": "Packages included in the most recent completed scan on each selected host.",
+         "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+         },
+         "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 0,
+            "y": 16
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "short",
+               "decimals": 0,
+               "min": 0,
+               "noValue": "No data",
+               "color": {
+                  "mode": "thresholds"
+               },
+               "mappings": [],
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                     {
+                        "color": "blue",
+                        "value": null
+                     }
+                  ]
+               }
+            },
+            "overrides": []
+         },
+         "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+               "calcs": [
+                  "lastNotNull"
+               ],
+               "fields": "",
+               "values": false
+            },
+            "textMode": "value",
+            "wideLayout": true
+         },
+         "targets": [
+            {
+               "refId": "A",
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "editorMode": "code",
+               "expr": "sum(nixploit_scanned_packages{instance=~\"${instance:regex}\"})",
+               "instant": true,
+               "range": false,
+               "format": "time_series"
+            }
+         ]
+      },
+      {
+         "id": 12,
+         "type": "stat",
+         "title": "Skipped paths",
+         "description": "Inventory paths the scanner could not include. Consult the scan report for the reason.",
+         "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+         },
+         "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 6,
+            "y": 16
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "short",
+               "decimals": 0,
+               "min": 0,
+               "noValue": "No data",
+               "color": {
+                  "mode": "thresholds"
+               },
+               "mappings": [],
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                     {
+                        "color": "green",
+                        "value": null
+                     },
+                     {
+                        "color": "orange",
+                        "value": 1
+                     }
+                  ]
+               }
+            },
+            "overrides": []
+         },
+         "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+               "calcs": [
+                  "lastNotNull"
+               ],
+               "fields": "",
+               "values": false
+            },
+            "textMode": "value",
+            "wideLayout": true
+         },
+         "targets": [
+            {
+               "refId": "A",
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "editorMode": "code",
+               "expr": "sum(nixploit_skipped_paths{instance=~\"${instance:regex}\"})",
+               "instant": true,
+               "range": false,
+               "format": "time_series"
+            }
+         ]
+      },
+      {
+         "id": 13,
+         "type": "stat",
+         "title": "Missing derivations",
+         "description": "Missing derivations can leave package metadata or build dependencies unavailable. Consult the scan report.",
+         "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+         },
+         "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 12,
+            "y": 16
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "short",
+               "decimals": 0,
+               "min": 0,
+               "noValue": "No data",
+               "color": {
+                  "mode": "thresholds"
+               },
+               "mappings": [],
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                     {
+                        "color": "green",
+                        "value": null
+                     },
+                     {
+                        "color": "orange",
+                        "value": 1
+                     }
+                  ]
+               }
+            },
+            "overrides": []
+         },
+         "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+               "calcs": [
+                  "lastNotNull"
+               ],
+               "fields": "",
+               "values": false
+            },
+            "textMode": "value",
+            "wideLayout": true
+         },
+         "targets": [
+            {
+               "refId": "A",
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "editorMode": "code",
+               "expr": "sum(nixploit_missing_derivations{instance=~\"${instance:regex}\"})",
+               "instant": true,
+               "range": false,
+               "format": "time_series"
+            }
+         ]
+      },
+      {
+         "id": 14,
+         "type": "stat",
+         "title": "Oldest archive check",
+         "description": "Age of the oldest successful archive check across feeds and selected hosts. Daily checks warn after 26 hours and turn red after 48 hours. A successful check may confirm that an archive has not changed.",
+         "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+         },
+         "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 18,
+            "y": 16
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "dtdurations",
+               "decimals": 0,
+               "min": 0,
+               "noValue": "No data",
+               "color": {
+                  "mode": "thresholds"
+               },
+               "mappings": [],
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                     {
+                        "color": "green",
+                        "value": null
+                     },
+                     {
+                        "color": "orange",
+                        "value": 93600
+                     },
+                     {
+                        "color": "red",
+                        "value": 172800
+                     }
+                  ]
+               }
+            },
+            "overrides": []
+         },
+         "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+               "calcs": [
+                  "lastNotNull"
+               ],
+               "fields": "",
+               "values": false
+            },
+            "textMode": "value",
+            "wideLayout": true
+         },
+         "targets": [
+            {
+               "refId": "A",
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "editorMode": "code",
+               "expr": "max(time() - nixploit_feed_checked_timestamp_seconds{instance=~\"${instance:regex}\"})",
+               "instant": true,
+               "range": false,
+               "format": "time_series"
+            }
+         ]
+      },
+      {
+         "id": 15,
+         "type": "table",
+         "title": "Findings",
+         "description": "The Table bucket selector filters this table only. Findings with no score are included. Click a CVE to open its NVD record. Saved rows can outlive a failed scan, so check the status and age panels above.",
+         "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+         },
+         "gridPos": {
+            "h": 12,
+            "w": 24,
+            "x": 0,
+            "y": 20
+         },
+         "fieldConfig": {
+            "defaults": {
+               "custom": {
+                  "align": "auto",
+                  "cellOptions": {
+                     "type": "auto"
+                  },
+                  "filterable": true
+               },
+               "noValue": ""
+            },
+            "overrides": [
+               {
+                  "matcher": {
+                     "id": "byName",
+                     "options": "Vulnerability"
+                  },
+                  "properties": [
+                     {
+                        "id": "links",
+                        "value": [
+                           {
+                              "title": "Open OSV record",
+                              "url": "https://osv.dev/vulnerability/${__value.raw}",
+                              "targetBlank": true
+                           }
+                        ]
+                     },
+                     {
+                        "id": "custom.width",
+                        "value": 190
+                     }
+                  ]
+               },
+               {
+                  "matcher": {
+                     "id": "byName",
+                     "options": "Severity"
+                  },
+                  "properties": [
+                     {
+                        "id": "custom.cellOptions",
+                        "value": {
+                           "type": "color-text"
+                        }
+                     },
+                     {
+                        "id": "mappings",
+                        "value": [
+                           {
+                              "type": "value",
+                              "options": {
+                                 "critical": {
+                                    "color": "dark-red",
+                                    "text": "critical"
+                                 },
+                                 "high": {
+                                    "color": "red",
+                                    "text": "high"
+                                 },
+                                 "medium": {
+                                    "color": "orange",
+                                    "text": "medium"
+                                 },
+                                 "low": {
+                                    "color": "blue",
+                                    "text": "low"
+                                 },
+                                 "none": {
+                                    "color": "green",
+                                    "text": "none"
+                                 },
+                                 "unscored": {
+                                    "color": "gray",
+                                    "text": "unscored"
+                                 }
+                              }
+                           }
+                        ]
+                     }
+                  ]
+               },
+               {
+                  "matcher": {
+                     "id": "byName",
+                     "options": "Known exploited"
+                  },
+                  "properties": [
+                     {
+                        "id": "custom.cellOptions",
+                        "value": {
+                           "type": "color-text"
+                        }
+                     },
+                     {
+                        "id": "mappings",
+                        "value": [
+                           {
+                              "type": "value",
+                              "options": {
+                                 "true": {
+                                    "color": "red",
+                                    "text": "Yes"
+                                 },
+                                 "false": {
+                                    "text": "No"
+                                 }
+                              }
+                           }
+                        ]
+                     }
+                  ]
+               }
+            ]
+         },
+         "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "frameIndex": 0,
+            "enablePagination": true,
+            "sortBy": [
+               {
+                  "displayName": "Package",
+                  "desc": false
+               }
+            ]
+         },
+         "transformations": [
+            {
+               "id": "filterFieldsByName",
+               "options": {
+                  "include": {
+                     "names": [
+                        "instance",
+                        "package",
+                        "version",
+                        "vulnerability",
+                        "severity",
+                        "known_exploited",
+                        "bucket"
+                     ]
+                  }
+               }
+            },
+            {
+               "id": "organize",
+               "options": {
+                  "excludeByName": {},
+                  "indexByName": {
+                     "instance": 0,
+                     "package": 1,
+                     "version": 2,
+                     "vulnerability": 3,
+                     "severity": 4,
+                     "known_exploited": 5,
+                     "bucket": 6
+                  },
+                  "renameByName": {
+                     "instance": "Host",
+                     "package": "Package",
+                     "version": "Version",
+                     "vulnerability": "Vulnerability",
+                     "severity": "Severity",
+                     "known_exploited": "Known exploited",
+                     "bucket": "Bucket"
+                  }
+               }
+            }
+         ],
+         "targets": [
+            {
+               "refId": "A",
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "editorMode": "code",
+               "expr": "nixploit_finding_info{instance=~\"${instance:regex}\",bucket=~\"${bucket:regex}\"}",
+               "instant": true,
+               "range": false,
+               "format": "table"
+            }
+         ]
+      }
+   ]
+}
