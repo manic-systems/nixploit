@@ -157,33 +157,45 @@ impl History {
          .clone_path(repository)
          .with_context(|| format!("{repository} is not an HTTPS repository URL"))?;
 
-      let output = if clone.is_dir() {
+      let fetching = clone.is_dir();
+
+      if fetching {
          writeln!(stderr().lock(), "Fetching {repository}")?;
-         git(&clone)
-            .args(STALL_LIMIT)
-            .args([
-               "fetch",
-               "--prune",
-               "--tags",
-               "--filter=tree:0",
-               "origin",
-               "+refs/heads/*:refs/heads/*",
-            ])
-            .output()
       } else {
          writeln!(stderr().lock(), "Cloning {repository}")?;
 
          if let Some(parent) = clone.parent() {
             fs::create_dir_all(parent)?;
          }
-
-         git(&clone)
-            .args(STALL_LIMIT)
-            .args(["clone", "--bare", "--filter=tree:0", "--", repository])
-            .arg(&clone)
-            .output()
       }
-      .context("Running git")?;
+
+      let transfer = |protocol: &[&str]| {
+         let mut command = git(&clone);
+         command.args(STALL_LIMIT).args(protocol);
+
+         if fetching {
+            command.args([
+               "fetch",
+               "--prune",
+               "--tags",
+               "--filter=tree:0",
+               "origin",
+               "+refs/heads/*:refs/heads/*",
+            ]);
+         } else {
+            command
+               .args(["clone", "--bare", "--filter=tree:0", "--", repository])
+               .arg(&clone);
+         }
+
+         command.output().context("Running git")
+      };
+      let mut output = transfer(&[])?;
+
+      if !output.status.success() {
+         writeln!(stderr().lock(), "Retrying {repository} over HTTP/1.1")?;
+         output = transfer(&["-c", "http.version=HTTP/1.1"])?;
+      }
 
       ensure!(
          output.status.success(),
