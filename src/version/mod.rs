@@ -855,8 +855,9 @@ impl AffectedVersion {
       }
    }
 
-   /// Returns the bound of an entry that caps affected releases from the start
-   /// of history, whether given as a range or a comparison expression.
+   /// Returns the bound capping an affected entry, whether given as a range or
+   /// a comparison expression. Kernel records repeat one introducing release
+   /// as the start of every line's range.
    fn upper_bound(&self) -> Option<(&str, Comparison)> {
       if self.status != Status::Affected || !self.changes.is_empty() {
          return None;
@@ -868,8 +869,8 @@ impl AffectedVersion {
          self.less_than.as_deref(),
          self.less_than_or_equal.as_deref(),
       ) {
-         (Some(end), None) if unspecified(version) => Some((end, Comparison::Less)),
-         (None, Some(end)) if unspecified(version) => Some((end, Comparison::LessEqual)),
+         (Some(end), None) => Some((end, Comparison::Less)),
+         (None, Some(end)) => Some((end, Comparison::LessEqual)),
          (None, None) => version
             .strip_prefix("<=")
             .map(|end| (end.trim(), Comparison::LessEqual))
