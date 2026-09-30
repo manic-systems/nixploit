@@ -92,7 +92,7 @@ nixploit update --provider vulncheck
 ```
 
 VulnCheck's generated CPEs only count for products NVD's analysis of the CVE
-doesn't place.
+doesn't place, and are dropped when the assigning CNA excludes the version.
 
 The OSV provider downloads OSV's public per-ecosystem dumps for PyPI, npm,
 crates.io, and Go. These carry GHSA, PYSEC, RUSTSEC, and Go advisories with

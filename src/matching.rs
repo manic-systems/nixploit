@@ -216,6 +216,11 @@ pub fn scan_package(
       collect_cpes(&vulnerability, &identity, &mut analysis, &mut collected);
 
       if collect_claims(&vulnerability, package, &identity, analysis, &mut collected) {
+         // VulnCheck generates its CPEs from the CNA record, keeping only its
+         // widest range or no version at all.
+         collected
+            .retain(|entry| !matches!(*entry, Evidence::Cpe { ref source, .. } if source != "nvd"));
+
          for entry in &mut collected {
             entry.defer_to_cna();
          }
