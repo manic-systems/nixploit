@@ -222,10 +222,10 @@ module to schedule scans.
 
 The service updates the feeds and scans the running system's runtime closure.
 Set `buildDependencies = true` to include build dependencies, `fromYear` to
-limit NVD coverage, and `settings` for the aliases and ignore rules above.
-`kbuild.enable` turns on the kernel configuration filter. These options live
-under `services.nixploit`. The timer persists across reboots and adds up to 15
-minutes of jitter.
+limit NVD coverage, `nvdMirror` to fetch NVD archives from a mirror, and
+`settings` for the aliases and ignore rules above. `kbuild.enable` turns on the
+kernel configuration filter. These options live under `services.nixploit`. The
+timer persists across reboots and adds up to 15 minutes of jitter.
 
 Start a scan immediately with `sudo systemctl start nixploit`. The last completed
 report is saved at `/var/lib/nixploit/report.json`, readable by root and the

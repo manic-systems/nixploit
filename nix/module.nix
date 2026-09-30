@@ -57,6 +57,10 @@ let
           "--from-year"
           (toString cfg.fromYear)
         ]
+        ++ lib.optionals (provider == "nvd" && cfg.nvdMirror != null) [
+          "--mirror"
+          cfg.nvdMirror
+        ]
         ++ lib.optionals (provider == "osv") (
           lib.concatMap (ecosystem: [
             "--ecosystem"
@@ -136,6 +140,13 @@ in
       type = lib.types.ints.between 2002 9999;
       default = 2002;
       description = "First NVD archive year to import, which limits advisory coverage.";
+    };
+
+    nvdMirror = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "https://nvd-mirror.example.internal/feeds/json/cve/2.0";
+      description = "Base URL serving the NVD JSON archives in place of nvd.nist.gov.";
     };
 
     settings = lib.mkOption {
