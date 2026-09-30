@@ -62,6 +62,10 @@ let
           "--mirror"
           cfg.nvdMirror
         ]
+        ++ lib.optionals (provider == "osv" && cfg.osvMirror != null) [
+          "--mirror"
+          cfg.osvMirror
+        ]
         ++ lib.optionals (provider == "osv") (
           lib.concatMap (ecosystem: [
             "--ecosystem"
@@ -150,6 +154,13 @@ in
       default = null;
       example = "https://nvd-mirror.example.internal/feeds/json/cve/2.0";
       description = "Base URL serving the NVD JSON archives in place of nvd.nist.gov.";
+    };
+
+    osvMirror = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "https://osv-mirror.example.internal";
+      description = "Base URL serving the OSV per-ecosystem all.zip dumps in place of the OSV bucket.";
     };
 
     settings = lib.mkOption {
