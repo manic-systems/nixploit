@@ -60,7 +60,13 @@ impl FromStr for VulnerabilityId {
          }),
          Some((prefix, rest)) => {
             prefix.len() >= 2
-               && prefix.bytes().all(|byte| byte.is_ascii_uppercase())
+               && prefix
+                  .bytes()
+                  .next()
+                  .is_some_and(|byte| byte.is_ascii_uppercase())
+               && prefix
+                  .bytes()
+                  .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit())
                && !rest.is_empty()
                && rest.bytes().all(|byte| {
                   byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':')
