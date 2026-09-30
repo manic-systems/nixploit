@@ -247,8 +247,8 @@ limit NVD coverage, `nvdMirror` and `osvMirror` to fetch NVD archives and OSV
 dumps from mirrors, and `settings` for the aliases and ignore rules above.
 `kbuild.enable` turns on the kernel configuration filter, and `history.enable`
 runs `nixploit history` before each scan. These options live under
-`services.nixploit`. The timer persists
-across reboots and adds up to 15 minutes of jitter.
+`services.nixploit`. The timer persists across reboots and adds up to 15
+minutes of jitter.
 
 Start a scan immediately with `sudo systemctl start nixploit`. The last completed
 report is saved at `/var/lib/nixploit/report.json`, readable by root and the
