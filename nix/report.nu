@@ -92,15 +92,20 @@ def "main run" [settings_file: path] {
          }
       }
       let history = if $settings.history {
-         [(invoke $settings.scanner ([--cache-dir, $cache, history] ++ $settings.scanArguments) /dev/null)]
-      } else { [] }
-      let status = $statuses ++ $history | where $it != 0 | get 0? | default 0
+         invoke $settings.scanner ([--cache-dir, $cache, history] ++ $settings.scanArguments) /dev/null
+      } else { 0 }
+      # history exits 1 when some repositories failed to sync, which only
+      # leaves their findings unsuppressed.
+      let status = $statuses | append (if $history == 1 { 0 } else { $history }) | where $it != 0 | get 0? | default 0
 
       if $status == 0 {
          publish ($directory | path join "nixploit-update.prom") [
             "# HELP nixploit_last_update_success_timestamp_seconds Last completed feed update"
             "# TYPE nixploit_last_update_success_timestamp_seconds gauge"
             $"nixploit_last_update_success_timestamp_seconds (date now | format date '%s')"
+            "# HELP nixploit_history_synced Whether every upstream repository synced in the last update"
+            "# TYPE nixploit_history_synced gauge"
+            $"nixploit_history_synced ($history == 0 | into int)"
          ]
 
          true

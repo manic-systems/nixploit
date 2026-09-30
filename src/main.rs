@@ -549,12 +549,16 @@ fn sync_history(
       })
       .count();
 
-   ensure!(
-      failures == 0,
-      "{} of {} repositories failed to sync",
-      failures,
-      repositories.len()
-   );
+   if failures > 0 {
+      writeln!(
+         io::stderr().lock(),
+         "{} of {} repositories failed to sync, their findings stay unsuppressed",
+         failures,
+         repositories.len()
+      )?;
+      return Ok(ExitCode::from(1));
+   }
+
    writeln!(
       io::stderr().lock(),
       "Synced {} repositories",

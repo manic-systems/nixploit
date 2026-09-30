@@ -221,7 +221,8 @@ finding when a fixing commit is in that tag, when the tag's branch carries a
 commit with the fix's author and subject or a `cherry picked from` trailer
 naming it, or when no introducing commit reaches the tag. Scans never fetch.
 Kernel repositories are skipped because kernel records already list stable
-backports.
+backports. A repository that fails to sync leaves its findings unsuppressed and
+makes `nixploit history` exit with `1`.
 
 ## NixOS
 
