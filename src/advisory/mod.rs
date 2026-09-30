@@ -217,6 +217,9 @@ pub struct Claims {
    pub cpes: Vec<CpeSource>,
    /// Product claims grouped by the source that published them.
    pub affected: Vec<AffectedSource>,
+   #[serde(default)]
+   /// Repository commit ranges grouped by the record that published them.
+   pub commits: Vec<CommitSource>,
 }
 
 impl Claims {
@@ -281,6 +284,12 @@ impl Claims {
             .any(|kept| kept.source == source.source && kept.ecosystem == source.ecosystem)
          {
             self.affected.push(source);
+         }
+      }
+
+      for source in older.commits {
+         if !self.commits.iter().any(|kept| kept.source == source.source) {
+            self.commits.push(source);
          }
       }
    }
@@ -414,6 +423,31 @@ impl Vulnerability {
       vulnerability.aliases.remove(&vulnerability.id);
       Some(vulnerability)
    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+/// Commit ranges one record gives for upstream repositories.
+pub struct CommitSource {
+   /// Record publishing the ranges.
+   pub source: String,
+   /// Ranges in the order the record lists them.
+   pub ranges: Vec<CommitRange>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+/// Commits bounding the affected history of one repository. A commit is
+/// affected when it descends from an introducing commit and from no fixing
+/// commit.
+pub struct CommitRange {
+   /// Repository URL the commits belong to.
+   pub repository: String,
+   /// Commits introducing the vulnerability, empty when it predates the
+   /// recorded history.
+   pub introduced: Vec<String>,
+   /// Commits fixing the vulnerability, one per branch that took the fix.
+   pub fixed: Vec<String>,
+   /// Last affected commits, which leave later history unbounded.
+   pub last_affected: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

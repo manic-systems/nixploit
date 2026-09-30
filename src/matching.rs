@@ -12,6 +12,7 @@ use crate::{
    config::Config,
    database::Database,
    digest::Sha256,
+   history::History,
    identifier::{NormalizedName, VulnerabilityId},
    identity::{Attribution, Identity},
    inventory::{Package, VersionOrigin},
@@ -67,6 +68,9 @@ pub struct Finding {
    pub fingerprint: Sha256,
    /// Explains why the finding is suppressed when applicable.
    pub suppression: Option<String>,
+   #[serde(skip)]
+   /// Repositories whose history can decide the finding.
+   pub repositories: BTreeSet<String>,
 }
 
 #[derive(Serialize)]
@@ -204,6 +208,7 @@ pub fn scan_package(
    database: &Database,
    package: &Package,
    config: &Config,
+   history: &History,
 ) -> Result<Vec<Finding>> {
    let mut identity = Identity::new(package, config);
    let candidates = database.candidates(&identity.names)?;
@@ -287,6 +292,7 @@ pub fn scan_package(
          raw_ranges,
          fingerprint: Sha256::from(hasher.finalize()),
          suppression: None,
+         repositories: History::repositories(&identity, &vulnerability.claims.commits),
       };
 
       finding.suppression = if iter::once(&finding.id)
@@ -299,6 +305,8 @@ pub fn scan_package(
          .is_some_and(|scope| unbuilt(scope, &finding.evidence))
       {
          Some("The kernel configuration builds none of the files the fix touches".to_owned())
+      } else if let Some(reason) = history.unaffected(&identity, &vulnerability.claims.commits)? {
+         Some(reason)
       } else {
          config.ignored(&finding).map(str::to_owned)
       };

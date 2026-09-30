@@ -1,16 +1,68 @@
 //! OSV schema records from the per-ecosystem vulnerability dumps.
 
-use std::collections::BTreeSet;
+use std::{
+   collections::BTreeSet,
+   fmt::{Display, Formatter, Result as FormatResult},
+   str::FromStr,
+};
 
+use misstep::{Report, Result};
 use serde::{Deserialize, de::IgnoredAny};
 
 use crate::{
    advisory::{
       Advisory, AdvisoryTimestamp, AffectedProduct, AffectedSource, AffectedVersion, Claims,
-      Description, Ecosystem, Metrics, Status,
+      CommitRange, CommitSource, Description, Ecosystem, Metrics, Status,
    },
    identifier::VulnerabilityId,
 };
+
+/// One per-ecosystem dump in the OSV bucket.
+#[derive(Clone, Copy)]
+pub enum Dump {
+   /// A package ecosystem's records.
+   Ecosystem(Ecosystem),
+   /// Records naming only repositories and their fixing commits.
+   Git,
+}
+
+impl Dump {
+   /// Every dump refreshed when an update names none.
+   pub const ALL: [Self; 5] = [
+      Self::Ecosystem(Ecosystem::PyPi),
+      Self::Ecosystem(Ecosystem::Npm),
+      Self::Ecosystem(Ecosystem::CratesIo),
+      Self::Ecosystem(Ecosystem::Go),
+      Self::Git,
+   ];
+}
+
+impl FromStr for Dump {
+   type Err = Report;
+
+   fn from_str(value: &str) -> Result<Self> {
+      if value == "GIT" {
+         Ok(Self::Git)
+      } else {
+         value.parse().map(Self::Ecosystem)
+      }
+   }
+}
+
+pound::from_str!(Dump);
+
+impl Display for Dump {
+   #[expect(
+      clippy::renamed_function_params,
+      reason = "The repository requires names longer than the trait's f parameter"
+   )]
+   fn fmt(&self, formatter: &mut Formatter<'_>) -> FormatResult {
+      match *self {
+         Self::Ecosystem(ecosystem) => ecosystem.fmt(formatter),
+         Self::Git => formatter.write_str("GIT"),
+      }
+   }
+}
 
 /// One OSV vulnerability record.
 #[derive(Deserialize)]
@@ -138,8 +190,45 @@ struct Range {
    /// Ordering the events use.
    #[serde(rename = "type")]
    kind: RangeKind,
+   #[serde(default)]
+   /// Repository whose commits a GIT range names.
+   repo: Option<String>,
    /// Events in ascending version order.
    events: Vec<Event>,
+}
+
+impl Range {
+   /// Collects the commits of a GIT range. An introduction at `0` means the
+   /// whole history is affected.
+   fn commits(&self) -> Option<CommitRange> {
+      if self.kind != RangeKind::Git {
+         return None;
+      }
+
+      let mut commits = CommitRange {
+         repository: self.repo.clone()?,
+         introduced: Vec::new(),
+         fixed: Vec::new(),
+         last_affected: Vec::new(),
+      };
+      let mut origin = false;
+
+      for event in &self.events {
+         match *event {
+            Event::Introduced(ref commit) if commit == "0" => origin = true,
+            Event::Introduced(ref commit) => commits.introduced.push(commit.clone()),
+            Event::Fixed(ref commit) => commits.fixed.push(commit.clone()),
+            Event::LastAffected(ref commit) => commits.last_affected.push(commit.clone()),
+            Event::Limit(_) => {}
+         }
+      }
+
+      if origin {
+         commits.introduced.clear();
+      }
+
+      Some(commits)
+   }
 }
 
 /// Version ordering named by a range.
@@ -198,6 +287,20 @@ impl From<Record> for Advisory {
          record.summary
       };
 
+      let ranges = record
+         .affected
+         .iter()
+         .flat_map(|entry| &entry.ranges)
+         .filter_map(Range::commits)
+         .collect::<Vec<_>>();
+      let commits = if ranges.is_empty() {
+         Vec::new()
+      } else {
+         vec![CommitSource {
+            source: record.id.to_string(),
+            ranges,
+         }]
+      };
       let mut affected = Vec::<AffectedSource>::new();
 
       for (ecosystem, product) in record.affected.into_iter().filter_map(Affected::into_claim) {
@@ -230,6 +333,7 @@ impl From<Record> for Advisory {
          claims: Claims {
             cpes: Vec::new(),
             affected,
+            commits,
          },
       }
    }

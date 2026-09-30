@@ -42,6 +42,7 @@ let
     builtins.toJSON {
       scanner = lib.getExe cfg.package;
       inherit textfileDirectory;
+      history = cfg.history.enable;
       scanArguments = [
         "--system"
         "--config"
@@ -118,6 +119,7 @@ in
           "npm"
           "crates.io"
           "Go"
+          "GIT"
         ]
       );
       default = [
@@ -125,8 +127,9 @@ in
         "npm"
         "crates.io"
         "Go"
+        "GIT"
       ];
-      description = "OSV ecosystems to refresh when the osv provider is enabled.";
+      description = "OSV ecosystem dumps to refresh when the osv provider is enabled. GIT carries the commit ranges the history check uses.";
     };
 
     tokenFile = lib.mkOption {
@@ -160,6 +163,13 @@ in
       default = config.boot.kernelPackages.kernel ? configfile;
       defaultText = lib.literalExpression "config.boot.kernelPackages.kernel ? configfile";
       description = "Suppress kernel findings whose fixes touch only files the kernel's Kbuild configuration does not compile.";
+    };
+
+    history.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = builtins.elem "osv" cfg.providers && builtins.elem "GIT" cfg.ecosystems;
+      defaultText = lib.literalExpression ''builtins.elem "osv" cfg.providers && builtins.elem "GIT" cfg.ecosystems'';
+      description = "Keep commit-only clones of the upstream repositories named by affected findings, so scans suppress findings whose fix is already in the installed release.";
     };
 
     dashboard.enable = lib.mkEnableOption "the nixploit dashboard in an existing Grafana service";
@@ -200,7 +210,8 @@ in
         path = [
           config.nix.package
           pkgs.coreutils
-        ];
+        ]
+        ++ lib.optional cfg.history.enable pkgs.gitMinimal;
         serviceConfig = {
           Type = "oneshot";
           User = "nixploit";

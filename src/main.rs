@@ -15,6 +15,7 @@ mod database;
 mod digest;
 /// Streamed vulnerability feed decoding.
 mod feed;
+mod history;
 mod identifier;
 mod identity;
 /// Nix closure inventory collection.
@@ -33,9 +34,10 @@ mod update;
 mod version;
 
 use std::{
+   collections::BTreeSet,
    env, fs,
    io::{self, Write as _},
-   path::PathBuf,
+   path::{Path, PathBuf},
    process::ExitCode,
    time::Instant,
 };
@@ -46,11 +48,12 @@ use misstep::{OptionExt as _, Report as ErrorReport, Result, ensure};
 use pound::{Error as ParseError, Parse};
 
 use crate::{
-   advisory::Ecosystem,
    config::Config,
    database::{Database, FeedState, Provider},
+   history::History,
    inventory::{Inventory, InventoryArgs},
    matching::Bucket,
+   osv::Dump,
    output::Report,
 };
 
@@ -127,8 +130,33 @@ enum Command {
       /// Last NVD archive year.
       through_year: Option<i32>,
       #[pound(long, value_name = "ECOSYSTEM")]
-      /// OSV ecosystem to refresh, every supported one when omitted.
-      ecosystem: Vec<Ecosystem>,
+      /// OSV ecosystem dump to refresh, every supported one when omitted.
+      ecosystem: Vec<Dump>,
+   },
+   /// Clone or refresh the upstream repositories that can decide affected
+   /// findings.
+   History {
+      #[pound(positional, value_name = "PATH")]
+      /// Nix paths to scan.
+      paths: Vec<PathBuf>,
+      /// Include the running NixOS system.
+      #[pound(long)]
+      system: bool,
+      /// Include build dependencies.
+      #[pound(long, conflicts_with = "no_requisites")]
+      build_deps: bool,
+      /// Inspect only the named paths.
+      #[pound(short = 'R', long)]
+      no_requisites: bool,
+      /// Add a package without querying Nix.
+      #[pound(long, value_name = "NAME@VERSION")]
+      package: Vec<String>,
+      /// Read a saved nixploit inventory.
+      #[pound(long, value_name = "JSON")]
+      inventory: Option<PathBuf>,
+      #[pound(long, value_name = "TOML")]
+      /// Configuration file to load.
+      config: Option<PathBuf>,
    },
    /// Import JSON, gzip, or ZIP feeds without network access.
    Import {
@@ -184,8 +212,8 @@ struct UpdateArgs {
    from_year: Option<i32>,
    /// Last NVD archive year.
    through_year: Option<i32>,
-   /// OSV ecosystems to refresh.
-   ecosystems: Vec<Ecosystem>,
+   /// OSV dumps to refresh.
+   ecosystems: Vec<Dump>,
 }
 
 /// Report formatting options.
@@ -253,14 +281,21 @@ fn parse_exit(error: &ParseError) -> ExitCode {
 }
 
 /// Executes one parsed command.
+#[expect(
+   clippy::too_many_lines,
+   reason = "pound supports neither flattened nor tuple subcommand arguments, so each arm \
+             destructures its own flags"
+)]
 fn run(cli: Cli) -> Result<ExitCode> {
    let command = cli
       .command
       .context("A command is required. Use --help to list commands")?;
-   let open_database = || match cli.cache_dir.as_deref() {
-      Some(directory) => Database::open(directory),
-      None => Database::open(&default_cache()?),
+   let cache = || {
+      cli.cache_dir
+         .as_deref()
+         .map_or_else(default_cache, |directory| Ok(directory.to_owned()))
    };
+   let open_database = || Database::open(&cache()?);
 
    match command {
       Command::Inventory {
@@ -301,6 +336,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
 
          scan(
             &database,
+            &History::new(&cache()?),
             &ScanArgs {
                inventory: InventoryArgs {
                   paths,
@@ -343,6 +379,31 @@ fn run(cli: Cli) -> Result<ExitCode> {
 
          write_json(&database.stats()?)?;
          Ok(ExitCode::SUCCESS)
+      }
+      Command::History {
+         paths,
+         system,
+         build_deps,
+         no_requisites,
+         package,
+         inventory,
+         config,
+      } => {
+         let database = open_database()?;
+
+         sync_history(
+            &database,
+            &History::new(&cache()?),
+            &InventoryArgs {
+               paths,
+               system,
+               build_deps,
+               no_requisites,
+               package,
+               inventory,
+            },
+            config.as_deref(),
+         )
       }
       Command::Import { files, provider } => {
          let mut database = open_database()?;
@@ -391,7 +452,7 @@ fn update_database(
       Provider::Vulncheck => update::vulncheck(database),
       Provider::Osv => {
          let ecosystems = if arguments.ecosystems.is_empty() {
-            Ecosystem::ALL.to_vec()
+            Dump::ALL.to_vec()
          } else {
             arguments.ecosystems
          };
@@ -438,8 +499,72 @@ fn import_files(database: &mut Database, files: Vec<PathBuf>, provider: Provider
    )
 }
 
+/// Refreshes one clone per affected finding whose commit ranges name an
+/// upstream repository, preferring GitHub and then a mirror already chosen.
+fn sync_history(
+   database: &Database,
+   history: &History,
+   arguments: &InventoryArgs,
+   config_path: Option<&Path>,
+) -> Result<ExitCode> {
+   let config = Config::load(config_path)?;
+   let inventory = Inventory::try_from(arguments)?;
+   let snapshot = database.snapshot()?;
+   let mut repositories = BTreeSet::new();
+
+   for package in &inventory.packages {
+      for finding in matching::scan_package(database, package, &config, history)? {
+         if finding.bucket != Bucket::Affected || finding.suppression.is_some() {
+            continue;
+         }
+
+         let chosen = finding
+            .repositories
+            .iter()
+            .find(|repository| repository.starts_with("https://github.com/"))
+            .or_else(|| {
+               finding
+                  .repositories
+                  .iter()
+                  .find(|repository| repositories.contains(*repository))
+            })
+            .or_else(|| finding.repositories.first());
+
+         if let Some(repository) = chosen {
+            repositories.insert(repository.to_owned());
+         }
+      }
+   }
+
+   snapshot.commit()?;
+
+   let failures = repositories
+      .iter()
+      .filter(|repository| match history.sync(repository) {
+         Ok(()) => false,
+         Err(error) => {
+            let _result = writeln!(io::stderr().lock(), "{error}");
+            true
+         }
+      })
+      .count();
+
+   ensure!(
+      failures == 0,
+      "{} of {} repositories failed to sync",
+      failures,
+      repositories.len()
+   );
+   writeln!(
+      io::stderr().lock(),
+      "Synced {} repositories",
+      repositories.len()
+   )?;
+   Ok(ExitCode::SUCCESS)
+}
+
 /// Scans one collected inventory against the advisory database.
-fn scan(database: &Database, arguments: &ScanArgs) -> Result<ExitCode> {
+fn scan(database: &Database, history: &History, arguments: &ScanArgs) -> Result<ExitCode> {
    let config = Config::load(arguments.config.as_deref())?;
    let inventory_started = Instant::now();
    let inventory = Inventory::try_from(&arguments.inventory)?;
@@ -465,7 +590,7 @@ fn scan(database: &Database, arguments: &ScanArgs) -> Result<ExitCode> {
    };
 
    for package in &inventory.packages {
-      for finding in matching::scan_package(database, package, &config)? {
+      for finding in matching::scan_package(database, package, &config, history)? {
          if arguments.kev_only && !finding.known_exploited {
             continue;
          }

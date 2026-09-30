@@ -91,7 +91,10 @@ def "main run" [settings_file: path] {
             }
          }
       }
-      let status = $statuses | where $it != 0 | get 0? | default 0
+      let history = if $settings.history {
+         [(invoke $settings.scanner ([--cache-dir, $cache, history] ++ $settings.scanArguments) /dev/null)]
+      } else { [] }
+      let status = $statuses ++ $history | where $it != 0 | get 0? | default 0
 
       if $status == 0 {
          publish ($directory | path join "nixploit-update.prom") [

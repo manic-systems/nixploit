@@ -29,9 +29,9 @@ use ureq::{
 };
 
 use crate::{
-   advisory::Ecosystem,
    database::{Database, FeedState, Provider},
    digest::Sha256,
+   osv::Dump,
 };
 
 /// Default directory containing NVD yearly archives and metadata.
@@ -320,8 +320,8 @@ pub fn vulncheck(database: &mut Database) -> Result<()> {
    Ok(())
 }
 
-/// Refresh the requested OSV ecosystem dumps when their stored object changed.
-pub fn osv(database: &mut Database, mirror: &str, ecosystems: &[Ecosystem]) -> Result<()> {
+/// Refresh the requested OSV dumps when their stored object changed.
+pub fn osv(database: &mut Database, mirror: &str, ecosystems: &[Dump]) -> Result<()> {
    ensure!(
       mirror.starts_with("https://") || mirror.starts_with("http://"),
       "Invalid mirror URL"

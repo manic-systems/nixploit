@@ -96,12 +96,13 @@ doesn't place, and are dropped when the assigning CNA excludes the version.
 
 The OSV provider downloads OSV's public per-ecosystem dumps for PyPI, npm,
 crates.io, and Go. These carry GHSA, PYSEC, RUSTSEC, and Go advisories with
-upstream package versions, including ones that never received a CVE. Pass
-`--ecosystem` to refresh only some of them.
+upstream package versions, including ones that never received a CVE. It also
+downloads the GIT dump, which gives the commits introducing and fixing a CVE in
+its upstream repository. Pass `--ecosystem` to refresh only some of them.
 
 ```sh
 nixploit update --provider osv
-nixploit update --provider osv --ecosystem PyPI --ecosystem Go
+nixploit update --provider osv --ecosystem PyPI --ecosystem GIT
 ```
 
 OSV claims only match packages built by the matching nixpkgs language builder,
@@ -203,6 +204,25 @@ build = "/nix/store/...-linux-kbuild-7.2.0"
 directory holding the patched tree's `Kbuild` and `Makefile` files plus
 `.config`. The NixOS module fills this in for the running kernel.
 
+### Upstream history
+
+Advisory ranges often name only the release that first shipped a fix, while a
+release branch took it earlier. `nixploit history` takes the same arguments as
+`scan` and keeps a commit-only clone of each upstream repository that the GIT
+dump names for an affected finding. It needs `git` and network access.
+
+```sh
+nixploit history --system
+nixploit scan --system
+```
+
+A scan then looks up the tag naming the installed version and suppresses the
+finding when a fixing commit is in that tag, when the tag's branch carries a
+commit with the fix's author and subject or a `cherry picked from` trailer
+naming it, or when no introducing commit reaches the tag. Scans never fetch.
+Kernel repositories are skipped because kernel records already list stable
+backports.
+
 ## NixOS
 
 Add this flake to your configuration as `inputs.nixploit`, then import its
@@ -224,8 +244,9 @@ The service updates the feeds and scans the running system's runtime closure.
 Set `buildDependencies = true` to include build dependencies, `fromYear` to
 limit NVD coverage, `nvdMirror` to fetch NVD archives from a mirror, and
 `settings` for the aliases and ignore rules above. `kbuild.enable` turns on the
-kernel configuration filter. These options live under `services.nixploit`. The
-timer persists across reboots and adds up to 15 minutes of jitter.
+kernel configuration filter, and `history.enable` runs `nixploit history` before
+each scan. These options live under `services.nixploit`. The timer persists
+across reboots and adds up to 15 minutes of jitter.
 
 Start a scan immediately with `sudo systemctl start nixploit`. The last completed
 report is saved at `/var/lib/nixploit/report.json`, readable by root and the

@@ -23,7 +23,7 @@ use crate::{
 
 /// Layout of the cache tables and record payloads, bumped whenever either
 /// changes shape.
-const SCHEMA_VERSION: i64 = 5;
+const SCHEMA_VERSION: i64 = 6;
 
 /// Vulnerability feed provider.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, ValueEnum)]

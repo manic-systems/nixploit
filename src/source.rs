@@ -134,6 +134,13 @@ impl SourceUrl {
       ))
    }
 
+   /// Names a repository by lowercased host and path without a `.git`
+   /// suffix.
+   pub fn repository(&self) -> String {
+      let path = self.path.trim_end_matches('/').trim_end_matches(".git");
+      format!("{}/{path}", self.host).to_ascii_lowercase()
+   }
+
    /// Matches a source archive URL to a repository URL without crossing owner
    /// boundaries.
    pub fn same_repository(&self, repository: &Self) -> bool {

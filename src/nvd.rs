@@ -123,6 +123,7 @@ impl From<Cve> for Advisory {
          claims: Claims {
             cpes,
             affected: cve.affected,
+            commits: Vec::new(),
          },
       }
    }
