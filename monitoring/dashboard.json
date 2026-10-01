@@ -1284,6 +1284,11 @@
                               "title": "Open OSV record",
                               "url": "https://osv.dev/vulnerability/${__value.raw}",
                               "targetBlank": true
+                           },
+                           {
+                              "title": "Open CVE record",
+                              "url": "https://www.cve.org/CVERecord?id=${__value.raw}",
+                              "targetBlank": true
                            }
                         ]
                      },
@@ -1371,6 +1376,22 @@
                         ]
                      }
                   ]
+               },
+               {
+                  "matcher": {
+                     "id": "byName",
+                     "options": "Score"
+                  },
+                  "properties": [
+                     {
+                        "id": "decimals",
+                        "value": 1
+                     },
+                     {
+                        "id": "custom.width",
+                        "value": 80
+                     }
+                  ]
                }
             ]
          },
@@ -1381,12 +1402,16 @@
             "enablePagination": true,
             "sortBy": [
                {
-                  "displayName": "Package",
-                  "desc": false
+                  "displayName": "Score",
+                  "desc": true
                }
             ]
          },
          "transformations": [
+            {
+               "id": "merge",
+               "options": {}
+            },
             {
                "id": "filterFieldsByName",
                "options": {
@@ -1397,6 +1422,7 @@
                         "version",
                         "vulnerability",
                         "severity",
+                        "Value #B",
                         "known_exploited",
                         "bucket"
                      ]
@@ -1413,8 +1439,9 @@
                      "version": 2,
                      "vulnerability": 3,
                      "severity": 4,
-                     "known_exploited": 5,
-                     "bucket": 6
+                     "Value #B": 5,
+                     "known_exploited": 6,
+                     "bucket": 7
                   },
                   "renameByName": {
                      "instance": "Host",
@@ -1422,6 +1449,7 @@
                      "version": "Version",
                      "vulnerability": "Vulnerability",
                      "severity": "Severity",
+                     "Value #B": "Score",
                      "known_exploited": "Known exploited",
                      "bucket": "Bucket"
                   }
@@ -1436,7 +1464,19 @@
                   "uid": "${datasource}"
                },
                "editorMode": "code",
-               "expr": "nixploit_finding_info{instance=~\"${instance:regex}\",bucket=~\"${bucket:regex}\"}",
+               "expr": "max without () (nixploit_finding_info{instance=~\"${instance:regex}\",bucket=~\"${bucket:regex}\"})",
+               "instant": true,
+               "range": false,
+               "format": "table"
+            },
+            {
+               "refId": "B",
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "editorMode": "code",
+               "expr": "max without () (nixploit_vulnerability_score{instance=~\"${instance:regex}\",bucket=~\"${bucket:regex}\"})",
                "instant": true,
                "range": false,
                "format": "table"
