@@ -2,10 +2,10 @@
   lib,
   rustPlatform,
   stdenv,
-  clang,
-  wild,
+  buildPackages,
 }:
 let
+  inherit (buildPackages) clang wild;
   hasWild =
     stdenv.hostPlatform.isLinux && (stdenv.hostPlatform.isx86_64 || stdenv.hostPlatform.isAarch64);
 in
@@ -21,7 +21,7 @@ rustPlatform.buildRustPackage {
   ];
 
   env = lib.optionalAttrs hasWild {
-    RUSTFLAGS = "-Clinker=${clang}/bin/clang -Clink-arg=--ld-path=wild";
+    RUSTFLAGS = "-Clinker=${clang}/bin/${clang.targetPrefix}clang -Clink-arg=--ld-path=wild";
   };
 
   meta.mainProgram = "nixploit";
