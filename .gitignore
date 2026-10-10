@@ -2,6 +2,7 @@
 !.cade
 !.editorconfig
 !.gitignore
+!.rustfmt.toml
 !.taplo.toml
 !Cargo.lock
 !Cargo.toml
@@ -9,7 +10,6 @@
 !README.md
 !flake.lock
 !flake.nix
-!rustfmt.toml
 
 !.github/
 !.github/**
