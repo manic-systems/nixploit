@@ -74,9 +74,21 @@ pub struct Finding {
 }
 
 #[derive(Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
 /// Records an advisory claim that applies to an installed package.
-pub enum Evidence {
+pub struct Evidence {
+   #[serde(flatten)]
+   /// Records the advisory claim.
+   pub claim: Claim,
+   /// Classifies the evidence certainty.
+   pub bucket: Bucket,
+   /// Explains the evidence classification.
+   pub reason: &'static str,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+/// Distinguishes the advisory data behind a piece of evidence.
+pub enum Claim {
    /// Records evidence derived from a CPE match.
    Cpe {
       /// Names the advisory data source.
@@ -87,10 +99,6 @@ pub enum Evidence {
       conditions: Conditions,
       /// Retains the configuration whose restrictions must be reviewed together.
       configuration: Option<Configuration>,
-      /// Classifies the evidence certainty.
-      bucket: Bucket,
-      /// Explains the evidence classification.
-      reason: String,
    },
    /// Records evidence derived from CNA affected-product data.
    Cna {
@@ -100,10 +108,6 @@ pub enum Evidence {
       primary: bool,
       /// Records the affected-product claim.
       affected: AffectedProduct,
-      /// Classifies the evidence certainty.
-      bucket: Bucket,
-      /// Explains the evidence classification.
-      reason: String,
    },
    /// Records evidence derived from an OSV ecosystem package claim.
    Osv {
@@ -113,71 +117,38 @@ pub enum Evidence {
       ecosystem: Ecosystem,
       /// Records the affected-package claim.
       affected: AffectedProduct,
-      /// Classifies the evidence certainty.
-      bucket: Bucket,
-      /// Explains the evidence classification.
-      reason: String,
    },
 }
 
 impl Evidence {
    /// Serializes the stable claim fields used by fingerprints.
    fn encoded_claim(&self) -> Result<String> {
-      Ok(match *self {
-         Self::Cpe {
+      let bucket = self.bucket;
+
+      Ok(match self.claim {
+         Claim::Cpe {
             ref source,
             ref criteria,
             ref conditions,
             ref configuration,
-            bucket,
-            ..
          } => serde_json::to_string(&("cpe", source, criteria, conditions, configuration, bucket))?,
-         Self::Cna {
+         Claim::Cna {
             ref source,
             primary,
             ref affected,
-            bucket,
-            ..
          } => serde_json::to_string(&("cna", source, primary, affected, bucket))?,
-         Self::Osv {
+         Claim::Osv {
             ref source,
             ecosystem,
             ref affected,
-            bucket,
-            ..
          } => serde_json::to_string(&("osv", source, ecosystem, affected, bucket))?,
       })
    }
 
-   /// Returns the certainty assigned to this evidence.
-   const fn bucket(&self) -> Bucket {
-      match *self {
-         Self::Cpe { bucket, .. } | Self::Cna { bucket, .. } | Self::Osv { bucket, .. } => bucket,
-      }
-   }
-
-   /// Leaves CPE matches for review when the assigning CNA's own version data
-   /// excludes the installed version, since NVD often widens CPE ranges from
-   /// description prose.
-   fn defer_to_cna(&mut self) {
-      if let Self::Cpe {
-         ref mut bucket,
-         ref mut reason,
-         ..
-      } = *self
-         && *bucket == Bucket::Affected
-      {
-         *bucket = Bucket::Unknown;
-         "The CPE version rule includes the installed version but the assigning \
-          CNA's version data excludes it"
-            .clone_into(reason);
-      }
-   }
-
    /// Returns the raw version ranges represented by this evidence.
    fn ranges(&self) -> Vec<String> {
-      match *self {
-         Self::Cna { ref affected, .. } | Self::Osv { ref affected, .. } => affected
+      match self.claim {
+         Claim::Cna { ref affected, .. } | Claim::Osv { ref affected, .. } => affected
             .versions
             .iter()
             .flat_map(|entry| {
@@ -188,7 +159,7 @@ impl Evidence {
                   .cloned()
             })
             .collect(),
-         Self::Cpe { ref criteria, .. } => iter::once(&criteria.criteria)
+         Claim::Cpe { ref criteria, .. } => iter::once(&criteria.criteria)
             .chain(&criteria.version_start_including)
             .chain(&criteria.version_start_excluding)
             .chain(&criteria.version_end_including)
@@ -222,12 +193,18 @@ pub fn scan_package(
 
       if collect_claims(&vulnerability, package, &identity, analysis, &mut collected) {
          // VulnCheck generates its CPEs from the CNA record, keeping only its
-         // widest range or no version at all.
-         collected
-            .retain(|entry| !matches!(*entry, Evidence::Cpe { ref source, .. } if source != "nvd"));
+         // widest range or no version at all. NVD often widens CPE ranges from
+         // description prose, so the CNA's exclusion sends the rest to review.
+         collected.retain(
+            |entry| !matches!(entry.claim, Claim::Cpe { ref source, .. } if source != "nvd"),
+         );
 
          for entry in &mut collected {
-            entry.defer_to_cna();
+            if matches!(entry.claim, Claim::Cpe { .. }) && entry.bucket == Bucket::Affected {
+               entry.bucket = Bucket::Unknown;
+               entry.reason = "The CPE version rule includes the installed version but the \
+                               assigning CNA's version data excludes it";
+            }
          }
       }
 
@@ -267,7 +244,7 @@ pub fn scan_package(
       let bucket = if !vulnerability.disputed
          && evidence
             .iter()
-            .any(|entry| entry.bucket() == Bucket::Affected)
+            .any(|entry| entry.bucket == Bucket::Affected)
       {
          Bucket::Affected
       } else {
@@ -322,9 +299,9 @@ pub fn scan_package(
 fn unbuilt(scope: &BuildScope, evidence: &[Evidence]) -> bool {
    let mut files = evidence
       .iter()
-      .filter_map(|entry| match *entry {
-         Evidence::Cna { ref affected, .. } => Some(&affected.program_files),
-         Evidence::Cpe { .. } | Evidence::Osv { .. } => None,
+      .filter_map(|entry| match entry.claim {
+         Claim::Cna { ref affected, .. } => Some(&affected.program_files),
+         Claim::Cpe { .. } | Claim::Osv { .. } => None,
       })
       .flatten()
       .peekable();
@@ -448,7 +425,7 @@ fn collect_claims(
    // range with an affected default and drops the open-ended fixed release,
    // so contributors only speak where the assigning CNA leaves the version
    // open.
-   let primary_claims = |entry: &Evidence| matches!(*entry, Evidence::Cna { primary: true, .. });
+   let primary_claims = |entry: &Evidence| matches!(entry.claim, Claim::Cna { primary: true, .. });
    let excluded = decided && !claims.iter().any(primary_claims);
 
    evidence.extend(
@@ -556,16 +533,18 @@ fn cna_claim(
 
    (
       verdict,
-      Some(Evidence::Cna {
-         source: source.source.clone(),
-         primary,
-         affected: product.to_owned(),
+      Some(Evidence {
+         claim: Claim::Cna {
+            source: source.source.clone(),
+            primary,
+            affected: product.to_owned(),
+         },
          bucket: if matched == Match::Yes {
             Bucket::Affected
          } else {
             Bucket::Unknown
          },
-         reason: reason.to_owned(),
+         reason,
       }),
    )
 }
@@ -614,16 +593,18 @@ fn collect_osv(
          "The OSV version range includes the installed version"
       };
 
-      evidence.push(Evidence::Osv {
-         source: source.source.clone(),
-         ecosystem,
-         affected: product.to_owned(),
+      evidence.push(Evidence {
+         claim: Claim::Osv {
+            source: source.source.clone(),
+            ecosystem,
+            affected: product.to_owned(),
+         },
          bucket: if matched == Match::Yes {
             Bucket::Affected
          } else {
             Bucket::Unknown
          },
-         reason: reason.to_owned(),
+         reason,
       });
    }
 }
@@ -707,14 +688,16 @@ fn collect_cpe(
       }
    });
 
-   evidence.push(Evidence::Cpe {
-      source: source.to_owned(),
-      criteria: entry.to_owned(),
-      conditions,
-      configuration: configuration
-         .filter(|_| conditions.additional || conditions.negated)
-         .cloned(),
+   evidence.push(Evidence {
+      claim: Claim::Cpe {
+         source: source.to_owned(),
+         criteria: entry.to_owned(),
+         conditions,
+         configuration: configuration
+            .filter(|_| conditions.additional || conditions.negated)
+            .cloned(),
+      },
       bucket,
-      reason: reason.to_owned(),
+      reason,
    });
 }

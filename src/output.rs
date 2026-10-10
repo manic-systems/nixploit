@@ -9,7 +9,7 @@ use serde::Serialize;
 use crate::{
    database::Stats,
    inventory::VersionOrigin,
-   matching::{Evidence, Finding},
+   matching::{Claim, Finding},
 };
 
 #[derive(Serialize)]
@@ -212,29 +212,25 @@ where
 
    if ranges {
       for evidence in &finding.evidence {
-         let (label, source, affected, reason) = match *evidence {
-            Evidence::Cna {
+         let reason = evidence.reason;
+         let (label, source, affected) = match evidence.claim {
+            Claim::Cna {
                ref source,
                primary,
                ref affected,
-               ref reason,
-               ..
             } => (
                if primary { "CNA" } else { "Contributor" },
                source,
                affected,
-               reason,
             ),
-            Evidence::Osv {
+            Claim::Osv {
                ref source,
                ref affected,
-               ref reason,
                ..
-            } => ("OSV", source, affected, reason),
-            Evidence::Cpe {
+            } => ("OSV", source, affected),
+            Claim::Cpe {
                ref source,
                ref criteria,
-               ref reason,
                ..
             } => {
                writeln!(writer, "  CPE {source}  {reason}")?;
