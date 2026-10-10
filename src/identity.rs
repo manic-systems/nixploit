@@ -11,7 +11,7 @@ use crate::{
    identifier::NormalizedName,
    inventory::{Package, VersionOrigin},
    source::{Collection, SourceUrl},
-   version::Match,
+   version::{Match, dotted},
 };
 
 /// Advisory products and their vendor for Nix packages whose own names
@@ -179,12 +179,7 @@ impl<'data> Identity<'data> {
          })?;
       let (version, package) = suffix.split_once('-')?;
 
-      if package.is_empty()
-         || version.is_empty()
-         || !version.split('.').all(|component| {
-            !component.is_empty() && component.bytes().all(|byte| byte.is_ascii_digit())
-         })
-      {
+      if package.is_empty() || !dotted(version) {
          return None;
       }
 

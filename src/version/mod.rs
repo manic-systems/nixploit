@@ -333,10 +333,7 @@ impl Version<'_> {
    /// Normalizes prerelease markers written without a hyphen, as CPEs and CNA
    /// custom versions do, before numeric comparison.
    fn unhyphenated_prerelease(input: &str) -> Option<String> {
-      let release_end =
-         input.find(|character: char| !character.is_ascii_digit() && character != '.')?;
-      let release = input.get(..release_end)?;
-      let suffix = input.get(release_end..)?;
+      let (release, suffix) = split_release(input);
       let update = suffix
          .strip_prefix('-')
          .or_else(|| suffix.strip_prefix('_'))
@@ -587,21 +584,13 @@ impl Version<'_> {
       let folded = installed.to_ascii_lowercase();
       let trimmed = folded.trim();
       let cleaned = trimmed.strip_prefix('v').unwrap_or(trimmed);
-      let prefix_end = cleaned
-         .find(|character: char| !character.is_ascii_digit() && character != '.')
-         .unwrap_or(cleaned.len());
-      let Some(prefix) = cleaned.get(..prefix_end) else {
-         return Match::Unknown;
-      };
+      let (prefix, suffix) = split_release(cleaned);
       let release = prefix.trim_end_matches('.');
 
       if !dotted(release) {
          return Match::Unknown;
       }
 
-      let Some(suffix) = cleaned.get(prefix_end..) else {
-         return Match::Unknown;
-      };
       let update = suffix.trim_start_matches(['-', '_']);
 
       if update.is_empty() {
@@ -641,10 +630,7 @@ impl FromStr for CpeRelease {
    type Err = Report;
 
    fn from_str(input: &str) -> Result<Self, Report> {
-      let prefix_end = input
-         .find(|character: char| !character.is_ascii_digit() && character != '.')
-         .unwrap_or(input.len());
-      let (prefix, suffix) = input.split_at(prefix_end);
+      let (prefix, suffix) = split_release(input);
 
       ensure!(dotted(prefix), "{} has no numeric release", input);
 
@@ -736,10 +722,7 @@ fn numbered_release_order<'text>(left: &'text str, right: &'text str) -> Option<
 
 /// The numeric release before a suffix like `-rc5` or `p15`.
 fn leading_release(value: &str) -> Option<&str> {
-   let end = value
-      .find(|character: char| !character.is_ascii_digit() && character != '.')
-      .unwrap_or(value.len());
-   let (release, suffix) = value.split_at(end);
+   let (release, suffix) = split_release(value);
    let qualified = suffix.is_empty()
       || suffix.starts_with(['-', '_', '+', '~'])
       || release.contains('.')
@@ -748,8 +731,24 @@ fn leading_release(value: &str) -> Option<&str> {
    (dotted(release) && qualified && !suffix.contains(char::is_whitespace)).then_some(release)
 }
 
+/// Splits a version before its first character that is neither a digit nor
+/// a dot.
+fn split_release(value: &str) -> (&str, &str) {
+   value.split_at(
+      value
+         .find(|character: char| !character.is_ascii_digit() && character != '.')
+         .unwrap_or(value.len()),
+   )
+}
+
+/// Reads the first two numeric components of a version.
+fn major_minor(version: &str, separators: &[char]) -> Option<(u64, u64)> {
+   let mut components = version.split(separators).map(str::parse::<u64>);
+   Some((components.next()?.ok()?, components.next()?.ok()?))
+}
+
 /// Reports whether a version contains only dot-separated numbers.
-fn dotted(value: &str) -> bool {
+pub fn dotted(value: &str) -> bool {
    !value.is_empty()
       && value
          .split('.')
@@ -1119,14 +1118,7 @@ impl AffectedProduct {
    /// bound, so a release past every bound on its own line is fixed even when
    /// a later line's bound still exceeds it.
    fn fixed_on_line(&self, installed: &str, kind: ProductKind) -> bool {
-      let line = |version: &str| {
-         let mut components = version
-            .trim()
-            .trim_start_matches('v')
-            .split(['.', '-'])
-            .map(str::parse::<u64>);
-         Some((components.next()?.ok()?, components.next()?.ok()?))
-      };
+      let line = |version: &str| major_minor(version.trim().trim_start_matches('v'), &['.', '-']);
       let bounds = self
          .versions
          .iter()
@@ -1148,11 +1140,6 @@ impl AffectedProduct {
    /// a record listing only stable backports still implies a fix in every
    /// series released after the one following its newest listed series.
    fn fixed_in_mainline(&self, installed: &str) -> bool {
-      let series = |version: &str| {
-         let mut components = version.split('.').map(str::parse::<u64>);
-         Some((components.next()?.ok()?, components.next()?.ok()?))
-      };
-
       let Some((major, minor)) = self
          .versions
          .iter()
@@ -1163,13 +1150,13 @@ impl AffectedProduct {
                   .including()
                   .is_some_and(|end| end.ends_with(".*"))
          })
-         .filter_map(|entry| series(&entry.version))
+         .filter_map(|entry| major_minor(&entry.version, &['.']))
          .max()
       else {
          return false;
       };
 
-      series(installed).is_some_and(|(current_major, current_minor)| {
+      major_minor(installed, &['.']).is_some_and(|(current_major, current_minor)| {
          if current_major == major {
             current_minor > minor.saturating_add(1)
          } else {
