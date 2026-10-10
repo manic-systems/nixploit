@@ -2,7 +2,7 @@ use std::{collections::BTreeSet, iter};
 
 use hmac_sha256::Hash;
 use misstep::Result;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 
 use crate::{
    advisory::{
@@ -33,19 +33,10 @@ pub enum Bucket {
 
 #[derive(Serialize)]
 /// Describes one vulnerability finding for an installed package.
-pub struct Finding {
-   /// Names the installed package.
-   pub package: String,
-   /// Records the installed package version.
-   pub version: String,
-   /// Names the installed derivation when available.
-   pub derivation: Option<String>,
-   /// Retains the store outputs needed to inspect inferred package metadata.
-   pub store_paths: BTreeSet<String>,
-   /// Distinguishes inferred names from derivation attributes during review.
-   pub metadata: VersionOrigin,
-   /// Retains source provenance used to resolve advisory identity conflicts.
-   pub source_urls: BTreeSet<SourceUrl>,
+pub struct Finding<'inventory> {
+   #[serde(flatten, serialize_with = "serialize_package")]
+   /// Installed package the finding concerns.
+   pub package: &'inventory Package,
    /// Identifies the vulnerability, preferring its CVE.
    pub id: VulnerabilityId,
    /// Other identifiers naming the same vulnerability.
@@ -170,17 +161,46 @@ impl Evidence {
    }
 }
 
+/// Serializes the package fields a report needs to identify and review a finding.
+fn serialize_package<SerializerType>(
+   package: &Package,
+   serializer: SerializerType,
+) -> Result<SerializerType::Ok, SerializerType::Error>
+where
+   SerializerType: Serializer,
+{
+   #[derive(Serialize)]
+   struct Fields<'package> {
+      package: &'package str,
+      version: &'package str,
+      derivation: Option<&'package str>,
+      store_paths: &'package BTreeSet<String>,
+      metadata: VersionOrigin,
+      source_urls: &'package BTreeSet<SourceUrl>,
+   }
+
+   Fields {
+      package: &package.name,
+      version: &package.version,
+      derivation: package.derivation.as_deref(),
+      store_paths: &package.store_paths,
+      metadata: package.metadata,
+      source_urls: &package.source_urls,
+   }
+   .serialize(serializer)
+}
+
 /// Finds advisory evidence that applies to an installed package.
 #[expect(
    clippy::little_endian_bytes,
    reason = "Evidence fingerprints encode claim lengths in little endian"
 )]
-pub fn scan_package(
+pub fn scan_package<'inventory>(
    database: &Database,
-   package: &Package,
+   package: &'inventory Package,
    config: &Config,
    history: &History,
-) -> Result<Vec<Finding>> {
+) -> Result<Vec<Finding<'inventory>>> {
    let mut identity = Identity::new(package, config);
    let candidates = database.candidates(&identity.names)?;
    identity.ambiguous = candidates.ambiguous_products;
@@ -252,12 +272,7 @@ pub fn scan_package(
       };
 
       let mut finding = Finding {
-         package: package.name.clone(),
-         version: package.version.clone(),
-         derivation: package.derivation.clone(),
-         store_paths: package.store_paths.clone(),
-         metadata: package.metadata,
-         source_urls: package.source_urls.clone(),
+         package,
          id: vulnerability.id,
          aliases: vulnerability.aliases,
          bucket,

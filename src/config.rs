@@ -196,13 +196,13 @@ impl Config {
          .ignore
          .iter()
          .find(|rule| {
-            rule.package == finding.package
+            rule.package == finding.package.name
                && rule.id == finding.id
                && rule.bucket == finding.bucket
                && rule
                   .version
                   .as_ref()
-                  .is_none_or(|version| *version == finding.version)
+                  .is_none_or(|version| *version == finding.package.version)
                && rule.until.is_none_or(|until| today < until)
                && rule
                   .fingerprint

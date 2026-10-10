@@ -189,7 +189,7 @@ impl Metrics {
    }
 
    /// Populates collectors from a completed report.
-   fn populate(&self, report: &Report) -> Result<()> {
+   fn populate(&self, report: &Report<'_>) -> Result<()> {
       self
          .scanned_packages
          .set(i64::try_from(report.scanned_packages)?);
@@ -226,14 +226,14 @@ impl Metrics {
    }
 
    /// Populates metrics for one report bucket.
-   fn populate_bucket(&self, bucket: &str, findings: &[Finding]) -> Result<()> {
+   fn populate_bucket(&self, bucket: &str, findings: &[Finding<'_>]) -> Result<()> {
       let mut aggregates = BTreeMap::new();
 
       for finding in findings {
          let aggregate = aggregates
             .entry((
-               finding.package.as_str(),
-               finding.version.as_str(),
+               finding.package.name.as_str(),
+               finding.package.version.as_str(),
                finding.id.as_ref(),
             ))
             .or_insert_with(Aggregate::default);
@@ -321,7 +321,7 @@ impl Metrics {
 }
 
 /// Atomically writes a completed report in Prometheus text format.
-pub fn write(report: &Report, path: &Path) -> Result<()> {
+pub fn write(report: &Report<'_>, path: &Path) -> Result<()> {
    let metrics = Metrics::new()?;
    metrics.populate(report)?;
    let encoded = metrics.encode()?;

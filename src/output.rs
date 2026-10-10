@@ -14,7 +14,7 @@ use crate::{
 
 #[derive(Serialize)]
 /// Scan report grouped into affected unknown and suppressed findings.
-pub struct Report {
+pub struct Report<'inventory> {
    /// Number of scanned packages covered by this report.
    pub scanned_packages: usize,
    /// Paths skipped because no package version was found.
@@ -26,14 +26,14 @@ pub struct Report {
    /// Database statistics for the imported CVE feeds.
    pub database: Stats,
    /// Findings with evidence of an affected version.
-   pub affected: Vec<Finding>,
+   pub affected: Vec<Finding<'inventory>>,
    /// Findings needing review because evidence was inconclusive.
-   pub unknown: Vec<Finding>,
+   pub unknown: Vec<Finding<'inventory>>,
    /// Findings suppressed by configuration ignore rules.
-   pub suppressed: Vec<Finding>,
+   pub suppressed: Vec<Finding<'inventory>>,
 }
 
-impl Report {
+impl Report<'_> {
    /// Sort each finding bucket by severity and identity.
    pub fn sort(&mut self) {
       for bucket in [&mut self.affected, &mut self.unknown, &mut self.suppressed] {
@@ -49,12 +49,18 @@ impl Report {
                      .total_cmp(&left.cvss.as_ref().map_or(0.0_f64, |score| score.base_score))
                })
                .then_with(|| {
-                  (&left.package, &left.version, &left.id, &left.derivation).cmp(&(
-                     &right.package,
-                     &right.version,
-                     &right.id,
-                     &right.derivation,
-                  ))
+                  (
+                     &left.package.name,
+                     &left.package.version,
+                     &left.id,
+                     &left.package.derivation,
+                  )
+                     .cmp(&(
+                        &right.package.name,
+                        &right.package.version,
+                        &right.id,
+                        &right.package.derivation,
+                     ))
                })
          });
       }
@@ -156,7 +162,7 @@ impl Report {
 /// Write one finding in the human-readable report format.
 fn write_finding<Writer>(
    writer: &mut Writer,
-   finding: &Finding,
+   finding: &Finding<'_>,
    descriptions: bool,
    ranges: bool,
 ) -> io::Result<()>
@@ -166,7 +172,7 @@ where
    write!(
       writer,
       "{} {}  {}",
-      finding.package, finding.version, finding.id
+      finding.package.name, finding.package.version, finding.id
    )?;
 
    if let Some(score) = finding.cvss.as_ref() {
@@ -198,14 +204,14 @@ where
       writeln!(writer, "  Also {}", aliases.join(", "))?;
    }
 
-   if let Some(derivation) = finding.derivation.as_ref() {
+   if let Some(derivation) = finding.package.derivation.as_ref() {
       writeln!(writer, "  {derivation}")?;
    }
 
-   if finding.metadata != VersionOrigin::Declared {
+   if finding.package.metadata != VersionOrigin::Declared {
       writeln!(writer, "  Package metadata inferred from a store name")?;
 
-      for path in &finding.store_paths {
+      for path in &finding.package.store_paths {
          writeln!(writer, "  {path}")?;
       }
    }
