@@ -11,6 +11,8 @@
 !flake.nix
 !rustfmt.toml
 
+!.github/
+!.github/**
 !monitoring/
 !monitoring/**
 !nix/
