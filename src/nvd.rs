@@ -99,10 +99,16 @@ impl From<Cve> for Advisory {
          });
       }
 
-      if !cve.vc_configurations.is_empty() || !cve.vc_vulnerable_cpes.is_empty() {
+      if !cve.vc_configurations.is_empty() {
          cpes.push(CpeSource {
             source: "vulncheck".to_owned(),
             configurations: cve.vc_configurations,
+            vulnerable_cpes: Vec::new(),
+         });
+      } else if !cve.vc_vulnerable_cpes.is_empty() {
+         cpes.push(CpeSource {
+            source: "vulncheck".to_owned(),
+            configurations: Vec::new(),
             vulnerable_cpes: cve.vc_vulnerable_cpes,
          });
       }
