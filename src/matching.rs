@@ -486,19 +486,18 @@ fn cna_claim(
       Attribution::Foreign => return (Verdict::Foreign, None),
    };
 
+   let vendor = NormalizedName::from(product.vendor.as_str());
+   let name = NormalizedName::from(product.product.as_str());
    let parallel_releases = source.affected_data.iter().any(|other| {
-      NormalizedName::from(other.vendor.as_str()) == NormalizedName::from(product.vendor.as_str())
-         && NormalizedName::from(other.product.as_str())
-            == NormalizedName::from(product.product.as_str())
-         && other.package_name == product.package_name
+      other.package_name == product.package_name
          && other.collection_url == product.collection_url
          && other.platforms == product.platforms
+         && NormalizedName::from(other.vendor.as_str()) == vendor
+         && NormalizedName::from(other.product.as_str()) == name
          && other.versions.iter().any(AffectedVersion::is_release)
    });
 
-   let kernel = primary
-      && NormalizedName::from(product.vendor.as_str()).as_ref() == "linux"
-      && NormalizedName::from(product.product.as_str()).as_ref() == "linux";
+   let kernel = primary && vendor.as_ref() == "linux" && name.as_ref() == "linux";
 
    let unverified_version = package.metadata.version_uncertain();
    let version_match = product.matches_version(
