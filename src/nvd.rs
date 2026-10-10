@@ -20,7 +20,7 @@ use serde_json::value::RawValue;
 use crate::{
    advisory::{
       Advisory, AdvisoryTimestamp, AffectedSource, Claims, CpeSource, Description, Metrics,
-      cpe::Configuration,
+      cpe::{Configuration, Cpe},
    },
    feed::FeedPage,
    identifier::VulnerabilityId,
@@ -51,7 +51,7 @@ struct Cve {
    vc_configurations: Vec<Configuration>,
    #[serde(default, rename = "vcVulnerableCPEs")]
    /// `VulnCheck` flat vulnerable CPE criteria.
-   vc_vulnerable_cpes: Vec<String>,
+   vc_vulnerable_cpes: Vec<Cpe>,
    #[serde(default)]
    /// CNA and contributor product claims.
    affected: Vec<AffectedSource>,

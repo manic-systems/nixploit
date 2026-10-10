@@ -18,7 +18,7 @@ use misstep::{Report, Result, ensure};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
 
 use crate::{
-   advisory::cpe::{Conditions, Configuration, Cpe},
+   advisory::cpe::{Conditions, Configuration, Cpe, SuppliedCpe},
    identifier::{NormalizedName, VulnerabilityId},
    source::{Collection, SourceUrl},
 };
@@ -302,10 +302,12 @@ impl Claims {
             for node in &configuration.nodes {
                node.visit(
                   &mut |entry, _conditions| {
-                     if entry.vulnerable
-                        && let Ok(cpe) = entry.criteria.parse::<Cpe>()
-                     {
-                        visit(cpe.product(), cpe.vendor(), Namespace::Upstream);
+                     if entry.vulnerable && entry.criteria.software() {
+                        visit(
+                           entry.criteria.product(),
+                           entry.criteria.vendor(),
+                           Namespace::Upstream,
+                        );
                      }
                   },
                   Conditions::default(),
@@ -313,10 +315,8 @@ impl Claims {
             }
          }
 
-         for criteria in &source.vulnerable_cpes {
-            if let Ok(cpe) = criteria.parse::<Cpe>() {
-               visit(cpe.product(), cpe.vendor(), Namespace::Upstream);
-            }
+         for cpe in source.vulnerable_cpes.iter().filter(|cpe| cpe.software()) {
+            visit(cpe.product(), cpe.vendor(), Namespace::Upstream);
          }
       }
 
@@ -335,10 +335,8 @@ impl Claims {
                visit(&NormalizedName::from(name), &vendor, namespace);
             }
 
-            for criteria in &product.cpes {
-               if let Ok(cpe) = criteria.parse::<Cpe>() {
-                  visit(cpe.product(), cpe.vendor(), namespace);
-               }
+            for cpe in product.cpes.iter().filter_map(SuppliedCpe::software) {
+               visit(cpe.product(), cpe.vendor(), namespace);
             }
          }
       }
@@ -353,7 +351,7 @@ pub struct CpeSource {
    /// Logical CPE configuration trees.
    pub configurations: Vec<Configuration>,
    /// Flat vulnerable CPE criteria without configuration context.
-   pub vulnerable_cpes: Vec<String>,
+   pub vulnerable_cpes: Vec<Cpe>,
 }
 
 /// Claims from every cached record describing one vulnerability.
@@ -544,7 +542,7 @@ pub struct AffectedProduct {
    pub platforms: Vec<String>,
    #[serde(default)]
    /// CPE criteria supplied alongside the product record.
-   pub cpes: Vec<String>,
+   pub cpes: Vec<SuppliedCpe>,
    #[serde(default, skip_serializing_if = "Vec::is_empty")]
    /// Source files the fix touches, as kernel.org records them.
    pub program_files: Vec<String>,

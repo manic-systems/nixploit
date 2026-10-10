@@ -3,7 +3,10 @@
 use std::{collections::BTreeSet, iter};
 
 use crate::{
-   advisory::{AffectedProduct, AffectedSource, Ecosystem, Namespace, cpe::Cpe},
+   advisory::{
+      AffectedProduct, AffectedSource, Ecosystem, Namespace,
+      cpe::{Cpe, SuppliedCpe},
+   },
    config::{Config, ProductAlias},
    identifier::NormalizedName,
    inventory::{Package, VersionOrigin},
@@ -120,7 +123,7 @@ impl<'data> Identity<'data> {
          || product
             .cpes
             .iter()
-            .filter_map(|criteria| criteria.parse::<Cpe>().ok())
+            .filter_map(SuppliedCpe::software)
             .any(|cpe| self.names.contains(cpe.product()))
    }
 
@@ -285,7 +288,7 @@ impl<'data> Identity<'data> {
          || product
             .cpes
             .iter()
-            .filter_map(|criteria| criteria.parse::<Cpe>().ok())
+            .filter_map(SuppliedCpe::software)
             .any(|cpe| {
                self.names.contains(cpe.product())
                   && !self.target_conflict(cpe.target_sw())

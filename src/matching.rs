@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize, Serializer};
 use crate::{
    advisory::{
       AffectedProduct, AffectedSource, AffectedVersion, Cvss, Ecosystem, Namespace, Vulnerability,
-      cpe::{Conditions, Configuration, Cpe, CpeMatch},
+      cpe::{Conditions, Configuration, CpeMatch},
    },
    config::Config,
    database::Database,
@@ -150,12 +150,18 @@ impl Evidence {
                   .cloned()
             })
             .collect(),
-         Claim::Cpe { ref criteria, .. } => iter::once(&criteria.criteria)
-            .chain(&criteria.version_start_including)
-            .chain(&criteria.version_start_excluding)
-            .chain(&criteria.version_end_including)
-            .chain(&criteria.version_end_excluding)
-            .cloned()
+         Claim::Cpe { ref criteria, .. } => iter::once(criteria.criteria.to_string())
+            .chain(
+               [
+                  &criteria.version_start_including,
+                  &criteria.version_start_excluding,
+                  &criteria.version_end_including,
+                  &criteria.version_end_excluding,
+               ]
+               .into_iter()
+               .flatten()
+               .cloned(),
+            )
             .collect(),
       }
    }
@@ -381,7 +387,7 @@ fn collect_cpes(
       for criteria in &source.vulnerable_cpes {
          collect_cpe(
             &source.source,
-            &CpeMatch::from(criteria.as_str()),
+            &CpeMatch::from(criteria.clone()),
             Conditions::default(),
             None,
             identity,
@@ -641,11 +647,9 @@ fn collect_cpe(
       return;
    }
 
-   let Ok(cpe) = entry.criteria.parse::<Cpe>() else {
-      return;
-   };
+   let cpe = &entry.criteria;
 
-   if !identity.names.contains(cpe.product()) {
+   if !cpe.software() || !identity.names.contains(cpe.product()) {
       return;
    }
 
@@ -654,13 +658,13 @@ fn collect_cpe(
       return;
    }
 
-   let identity_conflict = match identity.cpe(&cpe) {
+   let identity_conflict = match identity.cpe(cpe) {
       Attribution::Consistent => None,
       Attribution::Doubtful(reason) => Some(reason),
       Attribution::Foreign => return,
    };
    analysis.placed = true;
-   let mut matched = entry.matches_version(&package.version, &cpe);
+   let mut matched = entry.matches_version(&package.version);
 
    let unverified_version = package.metadata.version_uncertain();
 

@@ -7,7 +7,7 @@ use std::{
 };
 
 use misstep::{Report, Result, ensure};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
 
 use crate::identifier::NormalizedName;
 
@@ -161,8 +161,8 @@ impl Node {
 pub struct CpeMatch {
    /// Whether this CPE entry marks the product as vulnerable.
    pub vulnerable: bool,
-   /// CPE formatted string identifying the matched product.
-   pub criteria: String,
+   /// CPE name identifying the matched product.
+   pub criteria: Cpe,
    #[serde(default)]
    /// Inclusive lower bound for the affected version range.
    pub version_start_including: Option<String>,
@@ -177,12 +177,12 @@ pub struct CpeMatch {
    pub version_end_excluding: Option<String>,
 }
 
-impl From<&str> for CpeMatch {
+impl From<Cpe> for CpeMatch {
    /// Treats a bare vulnerable CPE as a match entry without version bounds.
-   fn from(criteria: &str) -> Self {
+   fn from(criteria: Cpe) -> Self {
       Self {
          vulnerable: true,
-         criteria: criteria.to_owned(),
+         criteria,
          version_start_including: None,
          version_start_excluding: None,
          version_end_including: None,
@@ -191,7 +191,7 @@ impl From<&str> for CpeMatch {
    }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 /// Preserves logical values and wildcard escapes in CPE components.
 pub enum CpeValue {
    /// Accepts any value for this component.
@@ -240,9 +240,25 @@ impl FromStr for CpeValue {
    }
 }
 
-#[derive(Debug)]
+/// CPE part naming the kind of product.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Part {
+   /// Applications.
+   Application,
+   /// Operating systems.
+   OperatingSystem,
+   /// Hardware devices, which configurations pair with the software running
+   /// on them.
+   Hardware,
+}
+
+#[derive(Clone, Debug)]
 /// Parsed CPE identity with vendor product and version fields.
 pub struct Cpe {
+   /// Formatted name as the source published it.
+   text: String,
+   /// CPE part component.
+   part: Part,
    /// CPE vendor component.
    vendor: NormalizedName,
    /// CPE product component.
@@ -258,6 +274,14 @@ pub struct Cpe {
 }
 
 impl Cpe {
+   /// Report whether the CPE names software rather than a hardware device.
+   pub const fn software(&self) -> bool {
+      match self.part {
+         Part::Application | Part::OperatingSystem => true,
+         Part::Hardware => false,
+      }
+   }
+
    /// Borrow the CPE vendor component.
    pub const fn vendor(&self) -> &NormalizedName {
       &self.vendor
@@ -292,7 +316,7 @@ impl Cpe {
 impl FromStr for Cpe {
    type Err = Report;
 
-   /// Parse CPE 2.3 application or operating system criteria.
+   /// Parse CPE 2.3 formatted string criteria.
    fn from_str(criteria: &str) -> Result<Self, Report> {
       let malformed = |reason: &str| Report::msg(format!("Malformed CPE {criteria} ({reason})"));
       let mut fields = Vec::with_capacity(13);
@@ -349,11 +373,12 @@ impl FromStr for Cpe {
          return Err(malformed("unsupported CPE version"));
       }
 
-      if !matches!(part.as_str(), "a" | "o") {
-         return Err(malformed(
-            "only application and operating system parts are supported",
-         ));
-      }
+      let kind = match part.as_str() {
+         "a" => Part::Application,
+         "o" => Part::OperatingSystem,
+         "h" => Part::Hardware,
+         _ => return Err(malformed("unknown part")),
+      };
 
       let unescape = |component: &str| {
          let mut characters = component.chars();
@@ -371,6 +396,8 @@ impl FromStr for Cpe {
       };
 
       Ok(Self {
+         text: criteria.to_owned(),
+         part: kind,
          vendor: NormalizedName::from(unescape(&vendor).as_str()),
          product: NormalizedName::from(unescape(&product).as_str()),
          version: version.parse()?,
@@ -378,5 +405,81 @@ impl FromStr for Cpe {
          target_sw: unescape(&target_sw),
          restricted,
       })
+   }
+}
+
+impl Display for Cpe {
+   #[expect(
+      clippy::renamed_function_params,
+      reason = "The repository requires names longer than the trait's f parameter"
+   )]
+   fn fmt(&self, formatter: &mut Formatter<'_>) -> FormatResult {
+      formatter.write_str(&self.text)
+   }
+}
+
+impl Serialize for Cpe {
+   fn serialize<Encoder>(&self, serializer: Encoder) -> Result<Encoder::Ok, Encoder::Error>
+   where
+      Encoder: Serializer,
+   {
+      serializer.serialize_str(&self.text)
+   }
+}
+
+impl<'de> Deserialize<'de> for Cpe {
+   fn deserialize<Decoder>(deserializer: Decoder) -> Result<Self, Decoder::Error>
+   where
+      Decoder: Deserializer<'de>,
+   {
+      String::deserialize(deserializer)?
+         .parse()
+         .map_err(Decoder::Error::custom)
+   }
+}
+
+/// CPE text a CNA supplied beside its product claim.
+#[derive(Clone, Debug)]
+pub enum SuppliedCpe {
+   /// A CPE 2.3 formatted string.
+   Name(Cpe),
+   /// Text this scanner cannot parse, such as a CPE 2.2 URI.
+   Unsupported(String),
+}
+
+impl SuppliedCpe {
+   /// Borrow the parsed name when it identifies software.
+   pub const fn software(&self) -> Option<&Cpe> {
+      match *self {
+         Self::Name(ref cpe) if cpe.software() => Some(cpe),
+         Self::Name(_) | Self::Unsupported(_) => None,
+      }
+   }
+}
+
+impl From<String> for SuppliedCpe {
+   fn from(text: String) -> Self {
+      text.parse().map_or(Self::Unsupported(text), Self::Name)
+   }
+}
+
+impl Serialize for SuppliedCpe {
+   fn serialize<Encoder>(&self, serializer: Encoder) -> Result<Encoder::Ok, Encoder::Error>
+   where
+      Encoder: Serializer,
+   {
+      match *self {
+         Self::Name(ref cpe) => cpe.serialize(serializer),
+         Self::Unsupported(ref text) => serializer.serialize_str(text),
+      }
+   }
+}
+
+impl<'de> Deserialize<'de> for SuppliedCpe {
+   fn deserialize<Decoder>(deserializer: Decoder) -> Result<Self, Decoder::Error>
+   where
+      Decoder: Deserializer<'de>,
+   {
+      String::deserialize(deserializer).map(Self::from)
    }
 }

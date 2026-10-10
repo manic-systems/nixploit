@@ -771,7 +771,8 @@ fn is_commit_hash(value: &str) -> bool {
 
 impl CpeMatch {
    /// Evaluates CPE release bounds without discarding update restrictions.
-   pub fn matches_version(&self, installed: &str, criteria: &Cpe) -> Match {
+   pub fn matches_version(&self, installed: &str) -> Match {
+      let criteria = &self.criteria;
       let update_restricted = matches!(criteria.version(), CpeValue::Any)
          && !matches!(criteria.update(), CpeValue::Any | CpeValue::NotApplicable);
       let release = match *criteria.update() {
