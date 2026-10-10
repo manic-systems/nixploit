@@ -65,6 +65,9 @@ pub struct Identity<'data> {
    pub names: BTreeSet<NormalizedName>,
    /// Vendor collisions are computed from current cached advisory revisions.
    pub ambiguous: BTreeSet<NormalizedName>,
+   /// Registry URLs, Nix language builders, and Nix ecosystem prefixes
+   /// identify language package namespaces.
+   pub collections: BTreeSet<Collection>,
 }
 
 impl<'data> Identity<'data> {
@@ -107,11 +110,38 @@ impl<'data> Identity<'data> {
             .filter_map(|url| url.module_path(major)),
       );
 
+      let mut collections = package
+         .source_urls
+         .iter()
+         .filter_map(SourceUrl::registry)
+         .chain(
+            package
+               .ecosystems
+               .iter()
+               .map(|ecosystem| ecosystem.collection()),
+         )
+         .collect::<BTreeSet<_>>();
+
+      for name in
+         iter::once(package.name.as_str()).chain(package.store_paths.iter().filter_map(|path| {
+            path
+               .rsplit('/')
+               .next()?
+               .split_once('-')
+               .map(|(_, name)| name)
+         }))
+      {
+         if let Some((collection, _)) = Self::prefixed_package(name) {
+            collections.insert(collection);
+         }
+      }
+
       Self {
          package,
          aliases,
          names,
          ambiguous: BTreeSet::new(),
+         collections,
       }
    }
 
@@ -131,7 +161,7 @@ impl<'data> Identity<'data> {
    pub fn ecosystem(&self, ecosystem: Ecosystem) -> Match {
       let collection = ecosystem.collection();
 
-      if self.package_collections().contains(&collection) {
+      if self.collections.contains(&collection) {
          Match::Yes
       } else if self.collection_conflict(collection) {
          Match::No
@@ -257,7 +287,7 @@ impl<'data> Identity<'data> {
       if Namespace::of(source, product) == Namespace::Distribution {
          // Distributions ship language packages under prefixed names such as
          // python3-foo, so a bare name match on one is another package.
-         if !self.package_collections().is_empty() {
+         if !self.collections.is_empty() {
             return Attribution::Foreign;
          }
 
@@ -271,7 +301,7 @@ impl<'data> Identity<'data> {
          && collection
             .as_ref()
             .is_some_and(|repository| repository.registry().is_none())
-         && !self.package_collections().is_empty()
+         && !self.collections.is_empty()
       {
          return Attribution::Doubtful(
             "The claim names a source repository this language package is not built from",
@@ -318,43 +348,8 @@ impl<'data> Identity<'data> {
             .any(|source| source.owner().as_ref() == Some(vendor))
    }
 
-   /// Registry URLs, Nix language builders, and Nix ecosystem prefixes
-   /// identify language package namespaces.
-   fn package_collections(&self) -> BTreeSet<Collection> {
-      let mut collections = self
-         .package
-         .source_urls
-         .iter()
-         .filter_map(SourceUrl::registry)
-         .chain(
-            self
-               .package
-               .ecosystems
-               .iter()
-               .map(|ecosystem| ecosystem.collection()),
-         )
-         .collect::<BTreeSet<_>>();
-
-      for name in iter::once(self.package.name.as_str()).chain(
-         self.package.store_paths.iter().filter_map(|path| {
-            path
-               .rsplit('/')
-               .next()?
-               .split_once('-')
-               .map(|(_, name)| name)
-         }),
-      ) {
-         if let Some((collection, _)) = Self::prefixed_package(name) {
-            collections.insert(collection);
-         }
-      }
-
-      collections
-   }
-
    /// Absent inventory metadata cannot establish a conflicting collection.
    fn collection_conflict(&self, collection: Collection) -> bool {
-      let collections = self.package_collections();
       // An inspected derivation records every nixpkgs language builder it
       // used, so a C library sharing a repository with Go or Python bindings
       // stays out of those ecosystems.
@@ -364,7 +359,7 @@ impl<'data> Identity<'data> {
             VersionOrigin::Declared | VersionOrigin::Unversioned
          );
 
-      !collections.contains(&collection) && (inspected || !collections.is_empty())
+      !self.collections.contains(&collection) && (inspected || !self.collections.is_empty())
    }
 
    /// CPE target software can contradict a known operating system or ecosystem.
