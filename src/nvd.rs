@@ -3,6 +3,7 @@
 use std::{
    collections::BTreeSet,
    fmt::{self, Formatter},
+   io::{Write as _, stderr},
    slice::Iter,
 };
 
@@ -257,22 +258,63 @@ where
    where
       Sequence: SeqAccess<'de>,
    {
-      let mut count = 0;
+      let mut count = 0_usize;
 
       while let Some(raw) = seq.next_element::<Box<RawValue>>().map_err(|error| {
          Error::custom(format!("CVE record {} failed to parse\n{error}", count + 1))
       })? {
-         let cve = serde_json::from_str::<Record>(raw.get())
-            .map_err(|error| {
-               Error::custom(format!("CVE record {} failed to parse\n{error}", count + 1))
-            })?
-            .0;
+         count += 1;
+
+         let cve = match serde_json::from_str::<Record>(raw.get()) {
+            Ok(record) => record.0,
+            Err(error) => {
+               if let Ok(probe) = serde_json::from_str::<RecordId>(raw.get())
+                  && let Err(invalid) = probe.id().parse::<VulnerabilityId>()
+               {
+                  writeln!(stderr().lock(), "Skipping CVE record {count}: {invalid}")
+                     .map_err(Error::custom)?;
+                  continue;
+               }
+
+               return Err(Error::custom(format!(
+                  "CVE record {count} failed to parse\n{error}"
+               )));
+            }
+         };
 
          (self.consume)(Advisory::from(cve)).map_err(Error::custom)?;
-         count += 1;
       }
 
       Ok(count)
+   }
+}
+
+/// The identifier alone, read when a whole record fails to parse.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum RecordId {
+   /// An NVD envelope around the CVE.
+   Envelope {
+      /// Wrapped CVE fields.
+      cve: BareId,
+   },
+   /// CVE fields stored directly.
+   Bare(BareId),
+}
+
+/// The identifier field of a CVE.
+#[derive(Deserialize)]
+struct BareId {
+   /// Unvalidated identifier text.
+   id: String,
+}
+
+impl RecordId {
+   /// Returns the identifier from either layout.
+   fn id(&self) -> &str {
+      match *self {
+         Self::Envelope { ref cve } | Self::Bare(ref cve) => &cve.id,
+      }
    }
 }
 
