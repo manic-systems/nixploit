@@ -41,6 +41,7 @@ impl FromStr for Collection {
          "perl" => Self::Perl,
          "nodejs" | "node.js" => Self::NodeJs,
          "rust" => Self::Rust,
+         "go" => Self::Go,
          "wordpress" => Self::WordPress,
          _ => return Err(Report::msg(format!("Unknown package collection {target}"))),
       })
