@@ -111,7 +111,7 @@ impl IgnoreRule {
             return Err(DeserializerType::Error::custom(format!(
                "Invalid expiry date {other}"
             )));
-         }
+         },
       };
       let bytes = value.as_bytes();
 

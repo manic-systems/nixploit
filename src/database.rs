@@ -591,8 +591,8 @@ impl PreparedAdvisory {
             transaction
                .prepare_cached("DELETE FROM record_checks WHERE id=?1 AND provider=?2")?
                .execute(params![self.id, provider])?;
-         }
-         None => {}
+         },
+         None => {},
       }
 
       let revision = transaction

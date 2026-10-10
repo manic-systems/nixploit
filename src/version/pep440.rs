@@ -113,7 +113,7 @@ impl FromStr for Pep440 {
          Some(number) => Some(number.ok_or_else(invalid)?),
          None => {
             marker(&mut rest, &[("post", ()), ("rev", ()), ("r", ())]).map(|((), number)| number)
-         }
+         },
       };
       let development = marker(&mut rest, &[("dev", ())]).map(|((), number)| number);
 

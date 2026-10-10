@@ -235,7 +235,7 @@ fn main() -> ExitCode {
       Err(error) => {
          let _result = writeln!(io::stderr().lock(), "{error}");
          return ExitCode::from(2);
-      }
+      },
    };
    let parsed = Cli::try_parse_from(raw_arguments.iter().map(String::as_str));
 
@@ -249,7 +249,7 @@ fn main() -> ExitCode {
       Err(error) => {
          let _result = writeln!(io::stderr().lock(), "{error}");
          ExitCode::from(2)
-      }
+      },
    }
 }
 
@@ -317,7 +317,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
 
          write_json(&Inventory::try_from(&arguments)?)?;
          Ok(ExitCode::SUCCESS)
-      }
+      },
       Command::Scan {
          paths,
          system,
@@ -356,7 +356,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
                kev_only,
             },
          )
-      }
+      },
       Command::Update {
          provider,
          mirror,
@@ -379,7 +379,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
 
          write_json(&database.stats()?)?;
          Ok(ExitCode::SUCCESS)
-      }
+      },
       Command::History {
          paths,
          system,
@@ -404,20 +404,20 @@ fn run(cli: Cli) -> Result<ExitCode> {
             },
             config.as_deref(),
          )
-      }
+      },
       Command::Import { files, provider } => {
          let mut database = open_database()?;
 
          import_files(&mut database, files, provider)?;
          write_json(&database.stats()?)?;
          Ok(ExitCode::SUCCESS)
-      }
+      },
       Command::Stats => {
          let database = open_database()?;
 
          write_json(&database.stats()?)?;
          Ok(ExitCode::SUCCESS)
-      }
+      },
    }
 }
 
@@ -462,7 +462,7 @@ fn update_database(
             arguments.mirror.as_deref().unwrap_or(update::OSV_MIRROR),
             &ecosystems,
          )
-      }
+      },
    }
 }
 
@@ -545,7 +545,7 @@ fn sync_history(
          Err(error) => {
             let _result = writeln!(io::stderr().lock(), "{error}");
             true
-         }
+         },
       })
       .count();
 

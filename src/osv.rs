@@ -135,13 +135,13 @@ impl Affected {
                   if let Some(start) = introduced.take() {
                      versions.push(entry(start, Some(version), None));
                   }
-               }
+               },
                Event::LastAffected(version) => {
                   if let Some(start) = introduced.take() {
                      versions.push(entry(start, None, Some(version)));
                   }
-               }
-               Event::Limit(_) => {}
+               },
+               Event::Limit(_) => {},
             }
          }
 
@@ -219,7 +219,7 @@ impl Range {
             Event::Introduced(ref commit) => commits.introduced.push(commit.clone()),
             Event::Fixed(ref commit) => commits.fixed.push(commit.clone()),
             Event::LastAffected(ref commit) => commits.last_affected.push(commit.clone()),
-            Event::Limit(_) => {}
+            Event::Limit(_) => {},
          }
       }
 

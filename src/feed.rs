@@ -301,11 +301,11 @@ fn consume_zip_members<Item>(
                for record in records {
                   consume(record)?;
                }
-            }
+            },
             Ok(WorkerMessage::Complete(page)) => {
                pages.extend(page);
                break;
-            }
+            },
             Ok(WorkerMessage::Failed(error)) => return Err(error),
             Err(_) => return Err(Report::msg("ZIP feed worker stopped")),
          }
@@ -365,7 +365,7 @@ where
       Format::Osv => {
          prepare_record(Advisory::from(OsvRecord::deserialize(&mut deserializer)?))?;
          FeedPage::from(1)
-      }
+      },
    };
 
    deserializer.end()?;

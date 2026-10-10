@@ -43,7 +43,7 @@ impl FromStr for AdvisoryTimestamp {
                })?;
 
             Offset::UTC.to_timestamp(datetime)?
-         }
+         },
       };
       let canonical = format!("{timestamp:.9}");
       let four_digit_year = canonical.len() == 30

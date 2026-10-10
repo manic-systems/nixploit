@@ -126,8 +126,8 @@ impl BuildScope {
          Some("tools" | "scripts" | "Documentation") => return Match::No,
          Some("arch") if components.next().is_some_and(|arch| arch != self.arch) => {
             return Match::No;
-         }
-         _ => {}
+         },
+         _ => {},
       }
 
       match file.rsplit_once('.') {
@@ -145,7 +145,7 @@ impl BuildScope {
             } else {
                Match::Unknown
             }
-         }
+         },
          _ => Match::Unknown,
       }
    }
@@ -189,7 +189,7 @@ impl BuildScope {
             Target::Linked => self.directory(ancestor) & assignment.gate,
             Target::Composite(ref name) => {
                self.object(ancestor, &format!("{name}.o"), depth + 1) & assignment.gate
-            }
+            },
          })
          .reduce(|left, right| left | right)
          .unwrap_or(Match::Unknown)
@@ -299,10 +299,10 @@ impl BuildScope {
                      Match::Unknown
                   });
                }
-            }
+            },
             "endif" => {
                conditions.pop();
-            }
+            },
             _ => {
                let gate = conditions
                   .iter()
@@ -311,7 +311,7 @@ impl BuildScope {
                if let Some(assignment) = self.assignment(line, gate) {
                   assignments.push(assignment);
                }
-            }
+            },
          }
       }
 

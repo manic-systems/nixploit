@@ -160,7 +160,7 @@ fn download_nvd(
             "Warning, NVD {year} is not published yet, skipping"
          )?;
          Ok(None)
-      }
+      },
       response => response
          .map(Some)
          .with_context(|| format!("Fetching NVD {year} {suffix}")),

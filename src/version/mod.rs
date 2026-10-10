@@ -218,9 +218,9 @@ impl PartialOrd for Version<'_> {
       match (calendar_date(left_clean), calendar_date(right_clean)) {
          (Some(left_date), Some(right_date)) => {
             return Some(left_date.cmp(&right_date));
-         }
+         },
          (Some(_), None) | (None, Some(_)) => return None,
-         (None, None) => {}
+         (None, None) => {},
       }
 
       if dotted(left_clean) && dotted(right_clean) {
@@ -282,12 +282,12 @@ impl PartialOrd for Version<'_> {
       ) {
          (Some(left_version), Some(right_version)) => {
             Some(left_version.cmp_precedence(&right_version))
-         }
+         },
          (Some(semantic_version), None) | (None, Some(semantic_version))
             if !semantic_version.pre.is_empty() =>
          {
             None
-         }
+         },
          _ if left_prerelease.is_some() || right_prerelease.is_some() => None,
          _ if self.scheme == Scheme::Cpe => parsed_order::<CpeRelease>(left_clean, right_clean),
          _ if self.scheme == Scheme::Custom => numbered_release_order(left_clean, right_clean),
@@ -406,13 +406,13 @@ impl Version<'_> {
                if matches!(operator, Comparison::Less | Comparison::LessEqual) =>
             {
                Match::Yes
-            }
+            },
             Some(Ordering::Equal) if matches!(operator, Comparison::LessEqual) => Match::Yes,
             Some(Ordering::Equal | Ordering::Greater)
                if matches!(operator, Comparison::Less | Comparison::LessEqual) =>
             {
                Match::No
-            }
+            },
             _ => Match::Unknown,
          };
       }
@@ -548,7 +548,7 @@ impl Version<'_> {
             };
 
             Some(format!("{release}-{update}"))
-         }
+         },
          CpeValue::Any | CpeValue::NotApplicable => None,
          CpeValue::Pattern(_) => return Match::Unknown,
       };
@@ -565,14 +565,14 @@ impl Version<'_> {
             } else {
                self.bound(specified, Comparison::Equal)
             }
-         }
+         },
          CpeValue::Pattern(ref pattern) => {
             if pattern.strip_suffix(".*").is_some_and(dotted) {
                self.expression(pattern)
             } else {
                Match::Unknown
             }
-         }
+         },
          CpeValue::Any | CpeValue::NotApplicable => Match::Unknown,
       };
 
@@ -792,7 +792,7 @@ impl CpeMatch {
             }),
          CpeValue::Any | CpeValue::NotApplicable | CpeValue::Literal(_) | CpeValue::Pattern(_) => {
             None
-         }
+         },
       };
       let bound_version = if update_restricted {
          release.or_else(|| dotted(installed).then_some(installed))
@@ -811,11 +811,11 @@ impl CpeMatch {
             } else {
                Match::Yes
             }
-         }
+         },
          CpeValue::NotApplicable => Match::Unknown,
          CpeValue::Literal(_) | CpeValue::Pattern(_) => {
             Scheme::Cpe.version(installed).cpe_exact(criteria)
-         }
+         },
       };
 
       for (endpoint, operator) in [
@@ -880,7 +880,7 @@ impl AffectedVersion {
             };
 
             lower & installed.bound(upper, operator)
-         }
+         },
          (None, None) => installed.expression(&self.version),
       }
    }
@@ -993,7 +993,7 @@ impl AffectedProduct {
             _ => {
                unknown = true;
                false
-            }
+            },
          };
 
          if matches {
@@ -1057,8 +1057,8 @@ impl AffectedProduct {
             Match::Unknown => {
                unknown = true;
                continue;
-            }
-            Match::Yes => {}
+            },
+            Match::Yes => {},
          }
 
          let mut status = entry.status;
@@ -1079,9 +1079,9 @@ impl AffectedProduct {
                   Some(Ordering::Less) => continue,
                   Some(Ordering::Equal) if status != change.status => {
                      return Match::Unknown;
-                  }
+                  },
                   None => return Match::Unknown,
-                  _ => {}
+                  _ => {},
                }
             }
 
@@ -1119,7 +1119,7 @@ impl AffectedProduct {
          Status::Affected if enumerated => Match::No,
          Status::Affected if kind == ProductKind::Kernel && self.fixed_in_mainline(installed) => {
             Match::No
-         }
+         },
          Status::Affected => Match::Yes,
          Status::Unaffected | Status::Unknown => Match::No,
       }

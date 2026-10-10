@@ -246,7 +246,7 @@ impl<'data> Identity<'data> {
 
       for name in names.iter().filter(|name| self.names.contains(*name)) {
          match self.product(name, &vendor, identity_matches) {
-            Attribution::Consistent => {}
+            Attribution::Consistent => {},
             other @ (Attribution::Doubtful(_) | Attribution::Foreign) => return other,
          }
       }

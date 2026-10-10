@@ -185,13 +185,13 @@ where
                count = Some(map.next_value_seed(RecordsSeed {
                   consume: self.consume,
                })?);
-            }
+            },
             "totalResults" => expected = Some(map.next_value::<usize>()?),
             "resultsPerPage" => page_size = Some(map.next_value::<usize>()?),
             "startIndex" => start = map.next_value::<usize>()?,
             _ => {
                map.next_value::<IgnoredAny>()?;
-            }
+            },
          }
       }
 
@@ -285,7 +285,7 @@ where
                return Err(Error::custom(format!(
                   "CVE record {count} failed to parse\n{error}"
                )));
-            }
+            },
          };
 
          (self.consume)(Advisory::from(cve)).map_err(Error::custom)?;

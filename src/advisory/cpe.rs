@@ -211,7 +211,7 @@ impl FromStr for CpeValue {
       match formatted {
          "*" => return Ok(Self::Any),
          "-" => return Ok(Self::NotApplicable),
-         _ => {}
+         _ => {},
       }
 
       let mut literal = String::new();

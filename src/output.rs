@@ -244,7 +244,7 @@ where
                   serde_json::to_string(criteria).map_err(Error::other)?
                )?;
                continue;
-            }
+            },
          };
 
          writeln!(
