@@ -653,7 +653,7 @@ fn collect_cpe(
       return;
    }
 
-   if identity.target_conflict(cpe.target_sw()) {
+   if identity.target_conflict(cpe.target()) {
       analysis.elsewhere = true;
       return;
    }

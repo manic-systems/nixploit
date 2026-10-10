@@ -5,7 +5,7 @@ use std::{collections::BTreeSet, iter};
 use crate::{
    advisory::{
       AffectedProduct, AffectedSource, Ecosystem, Namespace,
-      cpe::{Cpe, SuppliedCpe},
+      cpe::{Cpe, SuppliedCpe, Target},
    },
    config::{Config, ProductAlias},
    identifier::NormalizedName,
@@ -291,7 +291,7 @@ impl<'data> Identity<'data> {
             .filter_map(SuppliedCpe::software)
             .any(|cpe| {
                self.names.contains(cpe.product())
-                  && !self.target_conflict(cpe.target_sw())
+                  && !self.target_conflict(cpe.target())
                   && matches!(
                      self.product(cpe.product(), cpe.vendor(), identity_matches),
                      Attribution::Consistent
@@ -368,7 +368,7 @@ impl<'data> Identity<'data> {
    }
 
    /// CPE target software can contradict a known operating system or ecosystem.
-   pub fn target_conflict(&self, target: &str) -> bool {
+   pub fn target_conflict(&self, target: Target) -> bool {
       let system_differs = |suffix: &str| {
          self
             .package
@@ -378,12 +378,11 @@ impl<'data> Identity<'data> {
       };
 
       match target {
-         "windows" => system_differs("-windows"),
-         "linux" => system_differs("-linux"),
-         "macos" | "mac_os" | "darwin" => system_differs("-darwin"),
-         _ => target
-            .parse::<Collection>()
-            .is_ok_and(|collection| self.collection_conflict(collection)),
+         Target::Windows => system_differs("-windows"),
+         Target::Linux => system_differs("-linux"),
+         Target::Darwin => system_differs("-darwin"),
+         Target::Collection(collection) => self.collection_conflict(collection),
+         Target::Other => false,
       }
    }
 }

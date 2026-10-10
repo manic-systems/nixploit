@@ -9,7 +9,7 @@ use std::{
 use misstep::{Report, Result, ensure};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
 
-use crate::identifier::NormalizedName;
+use crate::{identifier::NormalizedName, source::Collection};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 /// Logical grouping of CPE nodes with a shared operator.
@@ -252,6 +252,32 @@ enum Part {
    Hardware,
 }
 
+/// Platform or package collection a CPE's target software names.
+#[derive(Clone, Copy, Debug)]
+pub enum Target {
+   /// Microsoft Windows.
+   Windows,
+   /// Linux.
+   Linux,
+   /// macOS.
+   Darwin,
+   /// A language package collection.
+   Collection(Collection),
+   /// Any target this scanner cannot compare with a package.
+   Other,
+}
+
+impl From<&str> for Target {
+   fn from(target: &str) -> Self {
+      match target {
+         "windows" => Self::Windows,
+         "linux" => Self::Linux,
+         "macos" | "mac_os" | "darwin" => Self::Darwin,
+         _ => target.parse().map_or(Self::Other, Self::Collection),
+      }
+   }
+}
+
 #[derive(Clone, Debug)]
 /// Parsed CPE identity with vendor product and version fields.
 pub struct Cpe {
@@ -268,7 +294,7 @@ pub struct Cpe {
    /// CPE update component.
    update: CpeValue,
    /// Target software identifies platform and package collection constraints.
-   target_sw: String,
+   target: Target,
    /// Whether platform fields narrow this CPE beyond wildcards.
    restricted: bool,
 }
@@ -302,9 +328,9 @@ impl Cpe {
       &self.update
    }
 
-   /// Borrow the CPE target software component.
-   pub fn target_sw(&self) -> &str {
-      &self.target_sw
+   /// Return the platform or collection the target software names.
+   pub const fn target(&self) -> Target {
+      self.target
    }
 
    /// Report whether platform fields narrow this CPE beyond wildcards.
@@ -402,7 +428,7 @@ impl FromStr for Cpe {
          product: NormalizedName::from(unescape(&product).as_str()),
          version: version.parse()?,
          update: update.parse()?,
-         target_sw: unescape(&target_sw),
+         target: Target::from(unescape(&target_sw).as_str()),
          restricted,
       })
    }
