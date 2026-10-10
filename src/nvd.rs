@@ -19,7 +19,8 @@ use serde_json::value::RawValue;
 
 use crate::{
    advisory::{
-      Advisory, AdvisoryTimestamp, AffectedSource, Claims, CpeSource, Description, Metrics,
+      Advisory, AdvisoryTimestamp, AffectedSource, Analyst, Claims, CpeClaims, CpeSource,
+      Description, Metrics,
       cpe::{Configuration, Cpe},
    },
    feed::FeedPage,
@@ -93,23 +94,20 @@ impl From<Cve> for Advisory {
 
       if !cve.configurations.is_empty() {
          cpes.push(CpeSource {
-            source: "nvd".to_owned(),
-            configurations: cve.configurations,
-            vulnerable_cpes: Vec::new(),
+            analyst: Analyst::Nvd,
+            claims: CpeClaims::Configurations(cve.configurations),
          });
       }
 
       if !cve.vc_configurations.is_empty() {
          cpes.push(CpeSource {
-            source: "vulncheck".to_owned(),
-            configurations: cve.vc_configurations,
-            vulnerable_cpes: Vec::new(),
+            analyst: Analyst::VulnCheck,
+            claims: CpeClaims::Configurations(cve.vc_configurations),
          });
       } else if !cve.vc_vulnerable_cpes.is_empty() {
          cpes.push(CpeSource {
-            source: "vulncheck".to_owned(),
-            configurations: Vec::new(),
-            vulnerable_cpes: cve.vc_vulnerable_cpes,
+            analyst: Analyst::VulnCheck,
+            claims: CpeClaims::VulnerableCpes(cve.vc_vulnerable_cpes),
          });
       }
 

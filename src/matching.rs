@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize, Serializer};
 
 use crate::{
    advisory::{
-      AffectedProduct, AffectedSource, AffectedVersion, Cvss, Ecosystem, Namespace, Vulnerability,
+      AffectedProduct, AffectedSource, AffectedVersion, Analyst, CpeClaims, Cvss, Ecosystem,
+      Namespace, Vulnerability,
       cpe::{Conditions, Configuration, CpeMatch},
    },
    config::Config,
@@ -83,7 +84,7 @@ pub enum Claim {
    /// Records evidence derived from a CPE match.
    Cpe {
       /// Names the advisory data source.
-      source: String,
+      source: Analyst,
       /// Records the CPE match criteria.
       criteria: CpeMatch,
       /// Records additional CPE applicability conditions.
@@ -221,9 +222,15 @@ pub fn scan_package<'inventory>(
          // VulnCheck generates its CPEs from the CNA record, keeping only its
          // widest range or no version at all. NVD often widens CPE ranges from
          // description prose, so the CNA's exclusion sends the rest to review.
-         collected.retain(
-            |entry| !matches!(entry.claim, Claim::Cpe { ref source, .. } if source != "nvd"),
-         );
+         collected.retain(|entry| {
+            !matches!(
+               entry.claim,
+               Claim::Cpe {
+                  source: Analyst::VulnCheck,
+                  ..
+               }
+            )
+         });
 
          for entry in &mut collected {
             if matches!(entry.claim, Claim::Cpe { .. }) && entry.bucket == Bucket::Affected {
@@ -351,49 +358,50 @@ fn collect_cpes(
    evidence: &mut Vec<Evidence>,
 ) {
    let cpes = &vulnerability.claims.cpes;
-   let analyst = cpes.iter().filter(|source| source.source == "nvd");
-   let supplemental = cpes.iter().filter(|source| source.source != "nvd");
+   let nvd = cpes.iter().filter(|source| source.analyst == Analyst::Nvd);
+   let supplemental = cpes.iter().filter(|source| source.analyst != Analyst::Nvd);
 
-   for source in analyst.chain(supplemental) {
-      if source.source != "nvd" && (analysis.placed || analysis.elsewhere) {
+   for source in nvd.chain(supplemental) {
+      if source.analyst != Analyst::Nvd && (analysis.placed || analysis.elsewhere) {
          break;
       }
 
-      for configuration in &source.configurations {
-         let conditions = configuration.conditions();
+      match source.claims {
+         CpeClaims::Configurations(ref configurations) => {
+            for configuration in configurations {
+               let conditions = configuration.conditions();
 
-         for node in &configuration.nodes {
-            node.visit(
-               &mut |entry, restricted| {
-                  collect_cpe(
-                     &source.source,
-                     entry,
-                     restricted,
-                     Some(configuration),
-                     identity,
-                     analysis,
-                     evidence,
+               for node in &configuration.nodes {
+                  node.visit(
+                     &mut |entry, restricted| {
+                        collect_cpe(
+                           source.analyst,
+                           entry,
+                           restricted,
+                           Some(configuration),
+                           identity,
+                           analysis,
+                           evidence,
+                        );
+                     },
+                     conditions,
                   );
-               },
-               conditions,
-            );
-         }
-      }
-
-      if !source.configurations.is_empty() {
-         continue;
-      }
-
-      for criteria in &source.vulnerable_cpes {
-         collect_cpe(
-            &source.source,
-            &CpeMatch::from(criteria.clone()),
-            Conditions::default(),
-            None,
-            identity,
-            analysis,
-            evidence,
-         );
+               }
+            }
+         },
+         CpeClaims::VulnerableCpes(ref names) => {
+            for criteria in names {
+               collect_cpe(
+                  source.analyst,
+                  &CpeMatch::from(criteria.clone()),
+                  Conditions::default(),
+                  None,
+                  identity,
+                  analysis,
+                  evidence,
+               );
+            }
+         },
       }
    }
 }
@@ -633,7 +641,7 @@ fn collect_osv(
 /// Collects one applicable CPE claim as evidence and records what it
 /// establishes about the package.
 fn collect_cpe(
-   source: &str,
+   source: Analyst,
    entry: &CpeMatch,
    conditions: Conditions,
    configuration: Option<&Configuration>,
@@ -709,7 +717,7 @@ fn collect_cpe(
 
    evidence.push(Evidence {
       claim: Claim::Cpe {
-         source: source.to_owned(),
+         source,
          criteria: entry.to_owned(),
          conditions,
          configuration: configuration

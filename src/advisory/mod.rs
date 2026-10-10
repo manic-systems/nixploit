@@ -272,7 +272,7 @@ impl Claims {
       // VulnCheck NVD++ records repeat NVD's CPE and CNA claims under the
       // same source labels, so the newest record carrying a label supplies it.
       for source in older.cpes {
-         if !self.cpes.iter().any(|kept| kept.source == source.source) {
+         if !self.cpes.iter().any(|kept| kept.analyst == source.analyst) {
             self.cpes.push(source);
          }
       }
@@ -298,25 +298,31 @@ impl Claims {
    /// qualifying the name.
    fn visit(&self, visit: &mut impl FnMut(&NormalizedName, &NormalizedName, Namespace)) {
       for source in &self.cpes {
-         for configuration in &source.configurations {
-            for node in &configuration.nodes {
-               node.visit(
-                  &mut |entry, _conditions| {
-                     if entry.vulnerable && entry.criteria.software() {
-                        visit(
-                           entry.criteria.product(),
-                           entry.criteria.vendor(),
-                           Namespace::Upstream,
-                        );
-                     }
-                  },
-                  Conditions::default(),
-               );
-            }
-         }
-
-         for cpe in source.vulnerable_cpes.iter().filter(|cpe| cpe.software()) {
-            visit(cpe.product(), cpe.vendor(), Namespace::Upstream);
+         match source.claims {
+            CpeClaims::Configurations(ref configurations) => {
+               for node in configurations
+                  .iter()
+                  .flat_map(|configuration| &configuration.nodes)
+               {
+                  node.visit(
+                     &mut |entry, _conditions| {
+                        if entry.vulnerable && entry.criteria.software() {
+                           visit(
+                              entry.criteria.product(),
+                              entry.criteria.vendor(),
+                              Namespace::Upstream,
+                           );
+                        }
+                     },
+                     Conditions::default(),
+                  );
+               }
+            },
+            CpeClaims::VulnerableCpes(ref cpes) => {
+               for cpe in cpes.iter().filter(|cpe| cpe.software()) {
+                  visit(cpe.product(), cpe.vendor(), Namespace::Upstream);
+               }
+            },
          }
       }
 
@@ -344,14 +350,45 @@ impl Claims {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-/// CPE configurations published by one analyzing source.
+/// CPE claims published by one analyzing source.
 pub struct CpeSource {
-   /// Name of the source that assigned these CPEs.
-   pub source: String,
+   /// Source that assigned these CPEs.
+   pub analyst: Analyst,
+   /// CPEs in the shape the analyst published them.
+   pub claims: CpeClaims,
+}
+
+/// Source analyzing a vulnerability into CPE claims.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Analyst {
+   /// The NVD's own analysts.
+   Nvd,
+   /// `VulnCheck`, which derives CPEs from CNA product names.
+   VulnCheck,
+}
+
+impl Display for Analyst {
+   #[expect(
+      clippy::renamed_function_params,
+      reason = "The repository requires names longer than the trait's f parameter"
+   )]
+   fn fmt(&self, formatter: &mut Formatter<'_>) -> FormatResult {
+      formatter.write_str(match *self {
+         Self::Nvd => "nvd",
+         Self::VulnCheck => "vulncheck",
+      })
+   }
+}
+
+/// CPE claims with or without configuration context.
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CpeClaims {
    /// Logical CPE configuration trees.
-   pub configurations: Vec<Configuration>,
-   /// Flat vulnerable CPE criteria without configuration context.
-   pub vulnerable_cpes: Vec<Cpe>,
+   Configurations(Vec<Configuration>),
+   /// Flat vulnerable CPE names.
+   VulnerableCpes(Vec<Cpe>),
 }
 
 /// Claims from every cached record describing one vulnerability.
