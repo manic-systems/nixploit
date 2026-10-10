@@ -264,6 +264,17 @@ impl<'data> Identity<'data> {
          );
       }
 
+      if !identity_matches
+         && collection
+            .as_ref()
+            .is_some_and(|repository| repository.registry().is_none())
+         && !self.package_collections().is_empty()
+      {
+         return Attribution::Doubtful(
+            "The claim names a source repository this language package is not built from",
+         );
+      }
+
       self.cna_cpes(product, identity_matches)
    }
 
