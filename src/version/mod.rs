@@ -21,7 +21,7 @@ use semver::Version as SemanticVersion;
 
 use crate::{
    advisory::{
-      AffectedProduct, AffectedVersion, Status, VersionType,
+      AffectedProduct, AffectedVersion, Bound, Status, VersionType,
       cpe::{Cpe, CpeMatch, CpeValue},
    },
    version::{nix::NixVersion, pep440::Pep440},
@@ -803,11 +803,10 @@ impl CpeMatch {
 
       let mut matched = match *criteria.version() {
          CpeValue::Any => {
-            if self.version_start_including.is_none()
-               && self.version_start_excluding.is_none()
-               && self.version_end_including.is_none()
-               && self.version_end_excluding.is_none()
-            {
+            if matches!(
+               (&self.start, &self.end),
+               (Bound::Unbounded, Bound::Unbounded)
+            ) {
                Match::Unknown
             } else {
                Match::Yes
@@ -819,25 +818,30 @@ impl CpeMatch {
          },
       };
 
-      for (endpoint, operator) in [
-         (&self.version_start_including, Comparison::GreaterEqual),
-         (&self.version_start_excluding, Comparison::Greater),
-         (&self.version_end_including, Comparison::LessEqual),
-         (&self.version_end_excluding, Comparison::Less),
+      for (bound, including, excluding) in [
+         (&self.start, Comparison::GreaterEqual, Comparison::Greater),
+         (&self.end, Comparison::LessEqual, Comparison::Less),
       ] {
-         if let Some(value) = endpoint.as_deref() {
-            matched = matched
-               & bound_version.map_or(Match::Unknown, |version| {
-                  Scheme::Cpe.version(version).bound(value, operator)
-               });
-         }
+         let (endpoint, operator) = match *bound {
+            Bound::Unbounded => continue,
+            Bound::Including(ref endpoint) => (endpoint, including),
+            Bound::Excluding(ref endpoint) => (endpoint, excluding),
+            Bound::Conflicting { .. } => {
+               matched = matched & Match::Unknown;
+               continue;
+            },
+         };
+
+         matched = matched
+            & bound_version.map_or(Match::Unknown, |version| {
+               Scheme::Cpe.version(version).bound(endpoint, operator)
+            });
       }
 
       // NVD leaves the end off ranges whose fix it never recorded, which
       // pre-2024 kernel CVEs do across every later release.
-      let open_ended = matches!(criteria.version(), CpeValue::Any)
-         && self.version_end_including.is_none()
-         && self.version_end_excluding.is_none();
+      let open_ended =
+         matches!(criteria.version(), CpeValue::Any) && matches!(self.end, Bound::Unbounded);
 
       if update_restricted && release.is_none() || open_ended {
          matched & Match::Unknown
@@ -862,28 +866,19 @@ impl AffectedVersion {
    /// Evaluates whether an affected-version entry contains an installed
    /// version.
    fn contains(&self, installed: Version<'_>) -> Match {
-      match (
-         self.less_than.as_deref(),
-         self.less_than_or_equal.as_deref(),
-      ) {
-         (Some(_), Some(_)) => Match::Unknown,
-         (Some(upper), None) | (None, Some(upper)) => {
-            let lower = if unspecified(self.version.trim()) {
-               Match::Yes
-            } else {
-               installed.bound(&self.version, Comparison::GreaterEqual)
-            };
+      let (upper, operator) = match self.upper {
+         Bound::Unbounded => return installed.expression(&self.version),
+         Bound::Including(ref upper) => (upper, Comparison::LessEqual),
+         Bound::Excluding(ref upper) => (upper, Comparison::Less),
+         Bound::Conflicting { .. } => return Match::Unknown,
+      };
+      let lower = if unspecified(self.version.trim()) {
+         Match::Yes
+      } else {
+         installed.bound(&self.version, Comparison::GreaterEqual)
+      };
 
-            let operator = if self.less_than.is_some() {
-               Comparison::Less
-            } else {
-               Comparison::LessEqual
-            };
-
-            lower & installed.bound(upper, operator)
-         },
-         (None, None) => installed.expression(&self.version),
-      }
+      lower & installed.bound(upper, operator)
    }
 
    /// Returns the bound capping an affected entry, whether given as a range or
@@ -896,13 +891,10 @@ impl AffectedVersion {
 
       let version = self.version.trim();
 
-      match (
-         self.less_than.as_deref(),
-         self.less_than_or_equal.as_deref(),
-      ) {
-         (Some(end), None) => Some((end, Comparison::Less)),
-         (None, Some(end)) => Some((end, Comparison::LessEqual)),
-         (None, None) => version
+      match self.upper {
+         Bound::Excluding(ref end) => Some((end.as_str(), Comparison::Less)),
+         Bound::Including(ref end) => Some((end.as_str(), Comparison::LessEqual)),
+         Bound::Unbounded => version
             .strip_prefix("<=")
             .map(|end| (end.trim(), Comparison::LessEqual))
             .or_else(|| {
@@ -911,7 +903,7 @@ impl AffectedVersion {
                   .map(|end| (end.trim(), Comparison::Less))
             })
             .filter(|&(end, _)| !end.contains([',', '|', '<', '>', '='])),
-         _ => None,
+         Bound::Conflicting { .. } => None,
       }
       .filter(|&(end, _)| end != "*")
    }
@@ -932,12 +924,10 @@ impl AffectedVersion {
       };
 
       (release(&self.version)
-         || unspecified(self.version.trim())
-            && (self.less_than.is_some() || self.less_than_or_equal.is_some()))
+         || unspecified(self.version.trim()) && !matches!(self.upper, Bound::Unbounded))
          && self
-            .less_than
-            .iter()
-            .chain(&self.less_than_or_equal)
+            .upper
+            .endpoints()
             .all(|endpoint| endpoint == "*" || release(endpoint))
    }
 
@@ -945,8 +935,7 @@ impl AffectedVersion {
    fn is_commit(&self) -> bool {
       self.version_type == Some(VersionType::Git)
          || iter::once(self.version.as_str())
-            .chain(self.less_than.as_deref())
-            .chain(self.less_than_or_equal.as_deref())
+            .chain(self.upper.endpoints().map(String::as_str))
             .chain(self.changes.iter().map(|change| change.at.as_str()))
             .any(is_commit_hash)
    }
@@ -1170,8 +1159,8 @@ impl AffectedProduct {
          .filter(|entry| {
             entry.status == Status::Unaffected
                && entry
-                  .less_than_or_equal
-                  .as_deref()
+                  .upper
+                  .including()
                   .is_some_and(|end| end.ends_with(".*"))
          })
          .filter_map(|entry| series(&entry.version))

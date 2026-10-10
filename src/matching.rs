@@ -145,23 +145,18 @@ impl Evidence {
             .iter()
             .flat_map(|entry| {
                iter::once(&entry.version)
-                  .chain(&entry.less_than)
-                  .chain(&entry.less_than_or_equal)
+                  .chain(entry.upper.endpoints())
                   .chain(entry.changes.iter().map(|change| &change.at))
                   .cloned()
             })
             .collect(),
          Claim::Cpe { ref criteria, .. } => iter::once(criteria.criteria.to_string())
             .chain(
-               [
-                  &criteria.version_start_including,
-                  &criteria.version_start_excluding,
-                  &criteria.version_end_including,
-                  &criteria.version_end_excluding,
-               ]
-               .into_iter()
-               .flatten()
-               .cloned(),
+               criteria
+                  .start
+                  .endpoints()
+                  .chain(criteria.end.endpoints())
+                  .cloned(),
             )
             .collect(),
       }

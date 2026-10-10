@@ -15,7 +15,9 @@ use std::{
 
 use jiff::{Timestamp, civil::DateTime, tz::Offset};
 use misstep::{Report, Result, ensure};
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
+use serde::{
+   Deserialize, Deserializer, Serialize, Serializer, de::Error as _, ser::SerializeStruct as _,
+};
 
 use crate::{
    advisory::cpe::{Conditions, Configuration, Cpe, SuppliedCpe},
@@ -598,26 +600,133 @@ pub enum Status {
    Unknown,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
+/// Version range endpoint as a source states it.
+#[derive(Clone, Debug)]
+pub enum Bound {
+   /// The source gives no endpoint.
+   Unbounded,
+   /// The endpoint belongs to the range.
+   Including(String),
+   /// The endpoint lies outside the range.
+   Excluding(String),
+   /// The source gives both forms, which leaves the endpoint undecided.
+   Conflicting {
+      /// Endpoint given as belonging to the range.
+      including: String,
+      /// Endpoint given as lying outside the range.
+      excluding: String,
+   },
+}
+
+impl Bound {
+   /// Classifies the inclusive and exclusive fields a record spells
+   /// separately.
+   pub fn new(including: Option<String>, excluding: Option<String>) -> Self {
+      match (including, excluding) {
+         (None, None) => Self::Unbounded,
+         (Some(endpoint), None) => Self::Including(endpoint),
+         (None, Some(endpoint)) => Self::Excluding(endpoint),
+         (Some(inclusive), Some(exclusive)) => Self::Conflicting {
+            including: inclusive,
+            excluding: exclusive,
+         },
+      }
+   }
+
+   /// Borrow the endpoint given as belonging to the range.
+   pub const fn including(&self) -> Option<&String> {
+      match *self {
+         Self::Including(ref endpoint)
+         | Self::Conflicting {
+            including: ref endpoint,
+            ..
+         } => Some(endpoint),
+         Self::Unbounded | Self::Excluding(_) => None,
+      }
+   }
+
+   /// Borrow the endpoint given as lying outside the range.
+   pub const fn excluding(&self) -> Option<&String> {
+      match *self {
+         Self::Excluding(ref endpoint)
+         | Self::Conflicting {
+            excluding: ref endpoint,
+            ..
+         } => Some(endpoint),
+         Self::Unbounded | Self::Including(_) => None,
+      }
+   }
+
+   /// Iterate over every endpoint the source gave.
+   pub fn endpoints(&self) -> impl Iterator<Item = &String> {
+      self.including().into_iter().chain(self.excluding())
+   }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(from = "AffectedVersionFields")]
 /// Version range entry with lifecycle and upper bound fields.
 pub struct AffectedVersion {
    /// Base version introducing this status entry.
    pub version: String,
    /// Status applying from the base version onward.
    pub status: Status,
-   #[serde(default)]
    /// Versioning scheme used for range comparison.
    pub version_type: Option<VersionType>,
-   #[serde(default)]
-   /// Exclusive upper bound for this status entry.
-   pub less_than: Option<String>,
-   #[serde(default)]
-   /// Inclusive upper bound for this status entry.
-   pub less_than_or_equal: Option<String>,
-   #[serde(default)]
+   /// Upper bound for this status entry.
+   pub upper: Bound,
    /// Status changes within this version range.
    pub changes: Vec<StatusChange>,
+}
+
+impl Serialize for AffectedVersion {
+   fn serialize<Encoder>(&self, serializer: Encoder) -> Result<Encoder::Ok, Encoder::Error>
+   where
+      Encoder: Serializer,
+   {
+      let mut fields = serializer.serialize_struct("AffectedVersion", 6)?;
+      fields.serialize_field("version", &self.version)?;
+      fields.serialize_field("status", &self.status)?;
+      fields.serialize_field("versionType", &self.version_type)?;
+      fields.serialize_field("lessThan", &self.upper.excluding())?;
+      fields.serialize_field("lessThanOrEqual", &self.upper.including())?;
+      fields.serialize_field("changes", &self.changes)?;
+      fields.end()
+   }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+/// Version range entry fields as CVE records spell them.
+struct AffectedVersionFields {
+   /// Base version introducing this status entry.
+   version: String,
+   /// Status applying from the base version onward.
+   status: Status,
+   #[serde(default)]
+   /// Versioning scheme used for range comparison.
+   version_type: Option<VersionType>,
+   #[serde(default)]
+   /// Exclusive upper bound for this status entry.
+   less_than: Option<String>,
+   #[serde(default)]
+   /// Inclusive upper bound for this status entry.
+   less_than_or_equal: Option<String>,
+   #[serde(default)]
+   /// Status changes within this version range.
+   changes: Vec<StatusChange>,
+}
+
+impl From<AffectedVersionFields> for AffectedVersion {
+   fn from(fields: AffectedVersionFields) -> Self {
+      Self {
+         version: fields.version,
+         status: fields.status,
+         version_type: fields.version_type,
+         upper: Bound::new(fields.less_than_or_equal, fields.less_than),
+         changes: fields.changes,
+      }
+   }
 }
 
 /// Version ordering named by a CVE record's `versionType`.

@@ -11,7 +11,7 @@ use serde::{Deserialize, de::IgnoredAny};
 
 use crate::{
    advisory::{
-      Advisory, AdvisoryTimestamp, AffectedProduct, AffectedSource, AffectedVersion, Claims,
+      Advisory, AdvisoryTimestamp, AffectedProduct, AffectedSource, AffectedVersion, Bound, Claims,
       CommitRange, CommitSource, Description, Ecosystem, Metrics, Status,
    },
    identifier::VulnerabilityId,
@@ -111,12 +111,11 @@ impl Affected {
    fn into_claim(self) -> Option<(Ecosystem, AffectedProduct)> {
       let package = self.package?;
       let ecosystem = package.ecosystem.parse::<Ecosystem>().ok()?;
-      let entry = |version: String, less_than, less_than_or_equal| AffectedVersion {
+      let entry = |version: String, upper| AffectedVersion {
          version,
          status: Status::Affected,
          version_type: Some(ecosystem.version_type()),
-         less_than,
-         less_than_or_equal,
+         upper,
          changes: Vec::new(),
       };
       let mut versions = Vec::new();
@@ -133,12 +132,12 @@ impl Affected {
                Event::Introduced(version) => introduced = Some(version),
                Event::Fixed(version) => {
                   if let Some(start) = introduced.take() {
-                     versions.push(entry(start, Some(version), None));
+                     versions.push(entry(start, Bound::Excluding(version)));
                   }
                },
                Event::LastAffected(version) => {
                   if let Some(start) = introduced.take() {
-                     versions.push(entry(start, None, Some(version)));
+                     versions.push(entry(start, Bound::Including(version)));
                   }
                },
                Event::Limit(_) => {},
@@ -146,7 +145,7 @@ impl Affected {
          }
 
          if let Some(start) = introduced {
-            versions.push(entry(start, None, Some("*".to_owned())));
+            versions.push(entry(start, Bound::Including("*".to_owned())));
          }
       }
 
@@ -154,7 +153,7 @@ impl Affected {
          versions = self
             .versions
             .into_iter()
-            .map(|version| entry(version, None, None))
+            .map(|version| entry(version, Bound::Unbounded))
             .collect();
       }
 

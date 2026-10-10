@@ -7,9 +7,11 @@ use std::{
 };
 
 use misstep::{Report, Result, ensure};
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
+use serde::{
+   Deserialize, Deserializer, Serialize, Serializer, de::Error as _, ser::SerializeStruct as _,
+};
 
-use crate::{identifier::NormalizedName, source::Collection};
+use crate::{advisory::Bound, identifier::NormalizedName, source::Collection};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 /// Logical grouping of CPE nodes with a shared operator.
@@ -155,26 +157,70 @@ impl Node {
    }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, Deserialize)]
+#[serde(from = "CpeMatchFields")]
 /// CPE match entry with optional version range bounds.
 pub struct CpeMatch {
    /// Whether this CPE entry marks the product as vulnerable.
    pub vulnerable: bool,
    /// CPE name identifying the matched product.
    pub criteria: Cpe,
+   /// Lower bound for the affected version range.
+   pub start: Bound,
+   /// Upper bound for the affected version range.
+   pub end: Bound,
+}
+
+impl Serialize for CpeMatch {
+   fn serialize<Encoder>(&self, serializer: Encoder) -> Result<Encoder::Ok, Encoder::Error>
+   where
+      Encoder: Serializer,
+   {
+      let mut fields = serializer.serialize_struct("CpeMatch", 6)?;
+      fields.serialize_field("vulnerable", &self.vulnerable)?;
+      fields.serialize_field("criteria", &self.criteria)?;
+      fields.serialize_field("versionStartIncluding", &self.start.including())?;
+      fields.serialize_field("versionStartExcluding", &self.start.excluding())?;
+      fields.serialize_field("versionEndIncluding", &self.end.including())?;
+      fields.serialize_field("versionEndExcluding", &self.end.excluding())?;
+      fields.end()
+   }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+/// CPE match entry fields as NVD spells them.
+struct CpeMatchFields {
+   /// Whether this CPE entry marks the product as vulnerable.
+   vulnerable: bool,
+   /// CPE name identifying the matched product.
+   criteria: Cpe,
    #[serde(default)]
    /// Inclusive lower bound for the affected version range.
-   pub version_start_including: Option<String>,
+   version_start_including: Option<String>,
    #[serde(default)]
    /// Exclusive lower bound for the affected version range.
-   pub version_start_excluding: Option<String>,
+   version_start_excluding: Option<String>,
    #[serde(default)]
    /// Inclusive upper bound for the affected version range.
-   pub version_end_including: Option<String>,
+   version_end_including: Option<String>,
    #[serde(default)]
    /// Exclusive upper bound for the affected version range.
-   pub version_end_excluding: Option<String>,
+   version_end_excluding: Option<String>,
+}
+
+impl From<CpeMatchFields> for CpeMatch {
+   fn from(fields: CpeMatchFields) -> Self {
+      Self {
+         vulnerable: fields.vulnerable,
+         criteria: fields.criteria,
+         start: Bound::new(
+            fields.version_start_including,
+            fields.version_start_excluding,
+         ),
+         end: Bound::new(fields.version_end_including, fields.version_end_excluding),
+      }
+   }
 }
 
 impl From<Cpe> for CpeMatch {
@@ -183,10 +229,8 @@ impl From<Cpe> for CpeMatch {
       Self {
          vulnerable: true,
          criteria,
-         version_start_including: None,
-         version_start_excluding: None,
-         version_end_including: None,
-         version_end_excluding: None,
+         start: Bound::Unbounded,
+         end: Bound::Unbounded,
       }
    }
 }
