@@ -832,7 +832,13 @@ impl CpeMatch {
          }
       }
 
-      if update_restricted && release.is_none() {
+      // NVD leaves the end off ranges whose fix it never recorded, which
+      // pre-2024 kernel CVEs do across every later release.
+      let open_ended = matches!(criteria.version(), CpeValue::Any)
+         && self.version_end_including.is_none()
+         && self.version_end_excluding.is_none();
+
+      if update_restricted && release.is_none() || open_ended {
          matched & Match::Unknown
       } else {
          matched
