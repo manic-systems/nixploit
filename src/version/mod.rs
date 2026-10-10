@@ -248,6 +248,16 @@ impl PartialOrd for Version<'_> {
          }
       }
 
+      if let (Some(left_release), Some(right_release)) =
+         (leading_release(left_clean), leading_release(right_clean))
+         && let Some(order) = Scheme::Custom
+            .version(left_release)
+            .partial_cmp(&Scheme::Custom.version(right_release))
+            .filter(|order| order.is_ne())
+      {
+         return Some(order);
+      }
+
       if self.scheme == Scheme::Kernel {
          return parsed_order::<KernelVersion>(left_clean, right_clean);
       }
@@ -722,6 +732,20 @@ fn numbered_release_order<'text>(left: &'text str, right: &'text str) -> Option<
       Ordering::Equal => Some(left_suffix?.cmp(&right_suffix?)),
       order @ (Ordering::Less | Ordering::Greater) => Some(order),
    }
+}
+
+/// The numeric release before a suffix like `-rc5` or `p15`.
+fn leading_release(value: &str) -> Option<&str> {
+   let end = value
+      .find(|character: char| !character.is_ascii_digit() && character != '.')
+      .unwrap_or(value.len());
+   let (release, suffix) = value.split_at(end);
+   let qualified = suffix.is_empty()
+      || suffix.starts_with(['-', '_', '+', '~'])
+      || release.contains('.')
+         && suffix.starts_with(|character: char| character.is_ascii_alphabetic());
+
+   (dotted(release) && qualified && !suffix.contains(char::is_whitespace)).then_some(release)
 }
 
 /// Reports whether a version contains only dot-separated numbers.
