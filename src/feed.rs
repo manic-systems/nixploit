@@ -1,9 +1,13 @@
 use std::{
    fs::File,
-   io::{BufReader, Read, Seek as _},
+   io::{self, BufReader, Read, Seek, SeekFrom},
    mem,
+   os::unix::fs::FileExt as _,
    path::Path,
-   sync::mpsc::{Receiver, SyncSender, sync_channel},
+   sync::{
+      Arc,
+      mpsc::{Receiver, SyncSender, sync_channel},
+   },
    thread,
 };
 
@@ -59,8 +63,12 @@ where
          consume,
       )?]
    } else if count == 4 && magic == *b"PK\x03\x04" {
-      let members = ZipArchive::new(file)?.len();
-      read_zip(path, format, members, prepare, consume)?
+      read_zip(
+         &ZipArchive::new(SharedFile::from(file))?,
+         format,
+         prepare,
+         consume,
+      )?
    } else {
       vec![read_json(BufReader::new(file), format, prepare, consume)?]
    };
@@ -106,11 +114,50 @@ enum WorkerMessage<Item> {
    Failed(Report),
 }
 
+/// A cursor over a shared file, so ZIP workers clone one parsed central
+/// directory instead of each holding OSV npm's 55 MB copy.
+#[derive(Clone)]
+struct SharedFile {
+   /// File every clone reads through positioned reads.
+   file: Arc<File>,
+   /// Offset of this cursor's next read.
+   position: u64,
+}
+
+impl From<File> for SharedFile {
+   fn from(file: File) -> Self {
+      Self {
+         file: Arc::new(file),
+         position: 0,
+      }
+   }
+}
+
+impl Read for SharedFile {
+   fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+      let count = self.file.read_at(buf, self.position)?;
+      self.position += u64::try_from(count).map_err(io::Error::other)?;
+      Ok(count)
+   }
+}
+
+impl Seek for SharedFile {
+   fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
+      self.position = match pos {
+         SeekFrom::Start(offset) => Some(offset),
+         SeekFrom::End(offset) => self.file.metadata()?.len().checked_add_signed(offset),
+         SeekFrom::Current(offset) => self.position.checked_add_signed(offset),
+      }
+      .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Seek outside the file"))?;
+
+      Ok(self.position)
+   }
+}
+
 /// Reads ZIP members concurrently and consumes them in archive order.
 fn read_zip<Item, Prepare, Consume>(
-   path: &Path,
+   archive: &ZipArchive<SharedFile>,
    format: Format,
-   member_count: usize,
    prepare: &Prepare,
    consume: &mut Consume,
 ) -> Result<Vec<FeedPage>>
@@ -119,6 +166,7 @@ where
    Prepare: Fn(Advisory) -> Result<Item> + Sync,
    Consume: FnMut(Item) -> Result<()>,
 {
+   let member_count = archive.len();
    let available = thread::available_parallelism().map_or(1, usize::from);
    let worker_count = available.min(8).min(member_count.max(1));
 
@@ -134,9 +182,8 @@ where
                .name(format!("feed-{worker}"))
                .spawn_scoped(scope, move || {
                   if let Err(error) = read_zip_worker(
-                     path,
+                     archive.clone(),
                      format,
-                     member_count,
                      worker,
                      worker_count,
                      prepare,
@@ -168,9 +215,8 @@ where
 
 /// Reads the strided member sequence assigned to one worker.
 fn read_zip_worker<Item, Prepare>(
-   path: &Path,
+   mut archive: ZipArchive<SharedFile>,
    format: Format,
-   member_count: usize,
    worker: usize,
    worker_count: usize,
    prepare: &Prepare,
@@ -180,10 +226,7 @@ where
    Item: BufferedRecord,
    Prepare: Fn(Advisory) -> Result<Item> + Sync,
 {
-   let file = File::open(path).with_context(|| format!("Opening {}", path.display()))?;
-   let mut archive = ZipArchive::new(file)?;
-
-   for index in (worker..member_count).step_by(worker_count) {
+   for index in (worker..archive.len()).step_by(worker_count) {
       let member = archive.by_index(index)?;
 
       if member.is_dir() || !is_json_member(member.name()) {
