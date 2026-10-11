@@ -499,14 +499,14 @@
          "id": 6,
          "type": "stat",
          "title": "Unknown",
-         "description": "Product matches with unresolved version evidence. Review these separately from confirmed affected ranges.",
+         "description": "Product matches with unresolved upstream version evidence. Review these separately from confirmed affected ranges.",
          "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
          },
          "gridPos": {
             "h": 4,
-            "w": 6,
+            "w": 3,
             "x": 6,
             "y": 4
          },
@@ -559,7 +559,78 @@
                   "uid": "${datasource}"
                },
                "editorMode": "code",
-               "expr": "sum(nixploit_findings{instance=~\"${instance:regex}\",bucket=\"unknown\"})",
+               "expr": "sum(nixploit_findings{instance=~\"${instance:regex}\",bucket=\"unknown\",distribution_only=\"false\"})",
+               "instant": true,
+               "range": false,
+               "format": "time_series"
+            }
+         ]
+      },
+      {
+         "id": 16,
+         "type": "stat",
+         "title": "Unknown, distribution only",
+         "description": "Unknown findings that only distribution package claims such as Red Hat RPMs describe, with no upstream version data.",
+         "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+         },
+         "gridPos": {
+            "h": 4,
+            "w": 3,
+            "x": 9,
+            "y": 4
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "short",
+               "decimals": 0,
+               "min": 0,
+               "noValue": "No data",
+               "color": {
+                  "mode": "thresholds"
+               },
+               "mappings": [],
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                     {
+                        "color": "green",
+                        "value": null
+                     },
+                     {
+                        "color": "blue",
+                        "value": 1
+                     }
+                  ]
+               }
+            },
+            "overrides": []
+         },
+         "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+               "calcs": [
+                  "lastNotNull"
+               ],
+               "fields": "",
+               "values": false
+            },
+            "textMode": "value",
+            "wideLayout": true
+         },
+         "targets": [
+            {
+               "refId": "A",
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "editorMode": "code",
+               "expr": "sum(nixploit_findings{instance=~\"${instance:regex}\",bucket=\"unknown\",distribution_only=\"true\"})",
                "instant": true,
                "range": false,
                "format": "time_series"

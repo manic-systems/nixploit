@@ -23,6 +23,8 @@ struct Aggregate {
    score: Option<f64>,
    /// Whether any derivation marks the finding as known exploited.
    known_exploited: bool,
+   /// Whether some derivation's finding rests on more than distribution packages.
+   upstream: bool,
 }
 
 /// Severity labels used by aggregate finding metrics, most severe first.
@@ -121,7 +123,7 @@ impl Metrics {
                "Distinct package vulnerabilities by report bucket and \
                 severity.",
             ),
-            &["bucket", "severity"],
+            &["bucket", "severity", "distribution_only"],
          )?,
          known_exploited: IntGaugeVec::new(
             Opts::new(
@@ -160,6 +162,7 @@ impl Metrics {
                "vulnerability",
                "severity",
                "known_exploited",
+               "distribution_only",
             ],
          )?,
          vulnerability_score: GaugeVec::new(
@@ -243,14 +246,18 @@ impl Metrics {
          }
 
          aggregate.known_exploited |= finding.known_exploited;
+         aggregate.upstream |= !finding.distribution_only();
       }
 
-      let mut severity_counts = BTreeMap::<Severity, usize>::new();
+      let mut severity_counts = BTreeMap::<(Severity, bool), usize>::new();
       let mut known_exploited_count = 0_usize;
 
       for ((package, version, vulnerability), aggregate) in aggregates {
          let severity = Severity::from(aggregate.score);
-         *severity_counts.entry(severity).or_default() += 1;
+         let distribution_only = if aggregate.upstream { "false" } else { "true" };
+         *severity_counts
+            .entry((severity, !aggregate.upstream))
+            .or_default() += 1;
          known_exploited_count += usize::from(aggregate.known_exploited);
 
          self
@@ -266,6 +273,7 @@ impl Metrics {
                } else {
                   "false"
                },
+               distribution_only,
             ])
             .set(1);
 
@@ -278,12 +286,21 @@ impl Metrics {
       }
 
       for severity in Severity::ALL {
-         let count = severity_counts.get(&severity).copied().unwrap_or_default();
+         for distribution_only in [false, true] {
+            let count = severity_counts
+               .get(&(severity, distribution_only))
+               .copied()
+               .unwrap_or_default();
 
-         self
-            .findings
-            .with_label_values(&[bucket, &severity.to_string()])
-            .set(i64::try_from(count)?);
+            self
+               .findings
+               .with_label_values(&[
+                  bucket,
+                  &severity.to_string(),
+                  if distribution_only { "true" } else { "false" },
+               ])
+               .set(i64::try_from(count)?);
+         }
       }
 
       self

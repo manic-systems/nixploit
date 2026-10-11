@@ -15,7 +15,7 @@ use crate::{
    digest::Sha256,
    history::History,
    identifier::{NormalizedName, VulnerabilityId},
-   identity::{Attribution, Identity},
+   identity::{Attribution, DISTRIBUTION_PACKAGE, Identity},
    inventory::{Package, VersionOrigin},
    kbuild::BuildScope,
    source::SourceUrl,
@@ -160,6 +160,16 @@ impl Evidence {
             )
             .collect(),
       }
+   }
+}
+
+impl Finding<'_> {
+   /// Whether only distribution packages, without upstream version data, back the finding.
+   pub fn distribution_only(&self) -> bool {
+      self
+         .evidence
+         .iter()
+         .all(|entry| entry.reason == DISTRIBUTION_PACKAGE)
    }
 }
 

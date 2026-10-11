@@ -44,6 +44,10 @@ const BUILTIN_ALIASES: &[(&[&str], &str, &[&str])] = &[
    ),
 ];
 
+/// Reason for an unknown claim that only a distribution's package describes.
+pub const DISTRIBUTION_PACKAGE: &str =
+   "The CNA claim describes a distribution package with a different version namespace";
+
 /// How a claim's vendor and namespace relate to the installed package.
 pub enum Attribution {
    /// Nothing in the claim contradicts the package identity.
@@ -272,24 +276,24 @@ impl<'data> Identity<'data> {
 
       let identity_matches = repository_matches || alias_matches;
 
+      let distribution = Namespace::of(source, product) == Namespace::Distribution;
+
       for name in names.iter().filter(|name| self.names.contains(*name)) {
          match self.product(name, &vendor, identity_matches) {
             Attribution::Consistent => {},
+            Attribution::Doubtful(_) if distribution => {},
             other @ (Attribution::Doubtful(_) | Attribution::Foreign) => return other,
          }
       }
 
-      if Namespace::of(source, product) == Namespace::Distribution {
+      if distribution {
          // Distributions ship language packages under prefixed names such as
          // python3-foo, so a bare name match on one is another package.
          if !self.collections.is_empty() {
             return Attribution::Foreign;
          }
 
-         return Attribution::Doubtful(
-            "The CNA claim describes a distribution package with a different \
-             version namespace",
-         );
+         return Attribution::Doubtful(DISTRIBUTION_PACKAGE);
       }
 
       if !identity_matches
