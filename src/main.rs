@@ -591,6 +591,7 @@ fn scan(database: &Database, history: &History, arguments: &ScanArgs) -> Result<
       affected: Vec::new(),
       unknown: Vec::new(),
       suppressed: Vec::new(),
+      unused_rules: Vec::new(),
    };
 
    for package in &inventory.packages {
@@ -611,6 +612,14 @@ fn scan(database: &Database, history: &History, arguments: &ScanArgs) -> Result<
    }
 
    snapshot.commit()?;
+   report.unused_rules = config.unused_rules(
+      &report
+         .affected
+         .iter()
+         .chain(&report.unknown)
+         .chain(&report.suppressed)
+         .collect::<Vec<_>>(),
+   );
    report.sort();
 
    let exit_status = if report.affected.is_empty() {

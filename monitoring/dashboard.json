@@ -1180,7 +1180,7 @@
          },
          "gridPos": {
             "h": 4,
-            "w": 6,
+            "w": 3,
             "x": 12,
             "y": 16
          },
@@ -1234,6 +1234,77 @@
                },
                "editorMode": "code",
                "expr": "sum(nixploit_missing_derivations{instance=~\"${instance:regex}\"})",
+               "instant": true,
+               "range": false,
+               "format": "time_series"
+            }
+         ]
+      },
+      {
+         "id": 17,
+         "type": "stat",
+         "title": "Unused ignore rules",
+         "description": "Ignore rules that matched no finding in the latest scan, usually pinned to a version that is no longer installed.",
+         "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+         },
+         "gridPos": {
+            "h": 4,
+            "w": 3,
+            "x": 15,
+            "y": 16
+         },
+         "fieldConfig": {
+            "defaults": {
+               "unit": "short",
+               "decimals": 0,
+               "min": 0,
+               "noValue": "No data",
+               "color": {
+                  "mode": "thresholds"
+               },
+               "mappings": [],
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                     {
+                        "color": "green",
+                        "value": null
+                     },
+                     {
+                        "color": "orange",
+                        "value": 1
+                     }
+                  ]
+               }
+            },
+            "overrides": []
+         },
+         "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+               "calcs": [
+                  "lastNotNull"
+               ],
+               "fields": "",
+               "values": false
+            },
+            "textMode": "value",
+            "wideLayout": true
+         },
+         "targets": [
+            {
+               "refId": "A",
+               "datasource": {
+                  "type": "prometheus",
+                  "uid": "${datasource}"
+               },
+               "editorMode": "code",
+               "expr": "count(nixploit_unused_ignore_rule_info{instance=~\"${instance:regex}\"}) or vector(0)",
                "instant": true,
                "range": false,
                "format": "time_series"

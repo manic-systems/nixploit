@@ -7,6 +7,7 @@ use jiff::Timestamp;
 use serde::Serialize;
 
 use crate::{
+   config::IgnoreRule,
    database::Stats,
    inventory::VersionOrigin,
    matching::{Claim, Finding},
@@ -31,6 +32,8 @@ pub struct Report<'inventory> {
    pub unknown: Vec<Finding<'inventory>>,
    /// Findings suppressed by configuration ignore rules.
    pub suppressed: Vec<Finding<'inventory>>,
+   /// Ignore rules that matched no finding.
+   pub unused_rules: Vec<&'inventory IgnoreRule>,
 }
 
 impl Report<'_> {
@@ -88,6 +91,14 @@ impl Report<'_> {
          self.unknown.len(),
          self.suppressed.len()
       )?;
+
+      if !self.unused_rules.is_empty() {
+         writeln!(
+            writer,
+            "{} ignore rules matched no finding",
+            self.unused_rules.len()
+         )?;
+      }
 
       if !self.skipped_paths.is_empty() || !self.missing_derivations.is_empty() {
          writeln!(

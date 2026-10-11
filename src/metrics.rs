@@ -111,6 +111,8 @@ struct Metrics {
    feed_checked: IntGaugeVec,
    /// Makes missing freshness state observable without a feed label.
    active_feeds: IntGauge,
+   /// Ignore rules that matched no finding.
+   unused_rule_info: IntGaugeVec,
 }
 
 impl Metrics {
@@ -173,6 +175,13 @@ impl Metrics {
             ),
             &["bucket", "package", "version", "vulnerability"],
          )?,
+         unused_rule_info: IntGaugeVec::new(
+            Opts::new(
+               "nixploit_unused_ignore_rule_info",
+               "Ignore rule that matched no finding in the latest scan.",
+            ),
+            &["package", "version", "vulnerability"],
+         )?,
          last_success: IntGauge::new(
             "nixploit_last_success_timestamp_seconds",
             "Unix timestamp of the completed scan.",
@@ -220,6 +229,17 @@ impl Metrics {
             .feed_checked
             .with_label_values(&[&feed.name])
             .set(feed.checked_at);
+      }
+
+      for rule in &report.unused_rules {
+         self
+            .unused_rule_info
+            .with_label_values(&[
+               rule.package.as_str(),
+               rule.version.as_deref().unwrap_or("*"),
+               rule.id.as_ref(),
+            ])
+            .set(1);
       }
 
       self.populate_bucket("affected", &report.affected)?;
@@ -313,7 +333,7 @@ impl Metrics {
    /// Registers and encodes all populated collectors.
    fn encode(self) -> Result<Vec<u8>> {
       let registry = Registry::new();
-      let collectors: [Box<dyn Collector>; 11] = [
+      let collectors: [Box<dyn Collector>; 12] = [
          Box::new(self.findings),
          Box::new(self.known_exploited),
          Box::new(self.scanned_packages),
@@ -325,6 +345,7 @@ impl Metrics {
          Box::new(self.last_success),
          Box::new(self.feed_checked),
          Box::new(self.active_feeds),
+         Box::new(self.unused_rule_info),
       ];
 
       for collector in collectors {

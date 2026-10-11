@@ -6,7 +6,7 @@ use std::{
 
 use jiff::{Timestamp, civil::Date, tz::TimeZone};
 use misstep::{Result, ResultExt as _, ensure};
-use serde::{Deserialize, Deserializer, de::Error as _};
+use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
 use toml::Value;
 
 use crate::{
@@ -72,30 +72,53 @@ pub struct ProductAlias {
    pub vendor: Option<NormalizedName>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 /// Suppression rule matching one finding with review metadata.
-struct IgnoreRule {
+pub struct IgnoreRule {
    /// Package name matched by the rule.
-   package: String,
+   pub package: String,
    /// Vulnerability identifier matched by the rule.
-   id: VulnerabilityId,
+   pub id: VulnerabilityId,
    /// Finding bucket matched by the rule.
-   bucket: Bucket,
+   pub bucket: Bucket,
    /// Review reason shown for the suppression.
-   reason: String,
+   pub reason: String,
    /// Optional package version matched by the rule.
-   version: Option<String>,
-   #[serde(default, deserialize_with = "IgnoreRule::deserialize_expiry")]
+   pub version: Option<String>,
+   #[serde(
+      default,
+      deserialize_with = "IgnoreRule::deserialize_expiry",
+      skip_serializing
+   )]
    /// Optional expiry date supplied by the user.
-   until: Option<Date>,
+   pub until: Option<Date>,
    /// Optional evidence fingerprint matched by the rule.
-   fingerprint: Option<Sha256>,
+   pub fingerprint: Option<Sha256>,
    /// Optional raw version ranges matched by the rule.
-   ranges: Option<Vec<String>>,
+   pub ranges: Option<Vec<String>>,
 }
 
 impl IgnoreRule {
+   /// Whether the rule applies to a finding on the given day.
+   fn matches(&self, finding: &Finding, today: Date) -> bool {
+      self.package == finding.package.name
+         && self.id == finding.id
+         && self.bucket == finding.bucket
+         && self
+            .version
+            .as_ref()
+            .is_none_or(|version| *version == finding.package.version)
+         && self.until.is_none_or(|until| today < until)
+         && self
+            .fingerprint
+            .is_none_or(|fingerprint| fingerprint == finding.fingerprint)
+         && self
+            .ranges
+            .as_ref()
+            .is_none_or(|ranges| *ranges == finding.raw_ranges)
+   }
+
    /// Parse an expiry date in the accepted calendar form.
    fn deserialize_expiry<'de, DeserializerType>(
       deserializer: DeserializerType,
@@ -195,23 +218,22 @@ impl Config {
       self
          .ignore
          .iter()
-         .find(|rule| {
-            rule.package == finding.package.name
-               && rule.id == finding.id
-               && rule.bucket == finding.bucket
-               && rule
-                  .version
-                  .as_ref()
-                  .is_none_or(|version| *version == finding.package.version)
-               && rule.until.is_none_or(|until| today < until)
-               && rule
-                  .fingerprint
-                  .is_none_or(|fingerprint| fingerprint == finding.fingerprint)
-               && rule
-                  .ranges
-                  .as_ref()
-                  .is_none_or(|ranges| *ranges == finding.raw_ranges)
-         })
+         .find(|rule| rule.matches(finding, today))
          .map(|rule| rule.reason.as_str())
+   }
+
+   /// Rules that match none of the findings, usually because the package
+   /// they name has moved to another version.
+   pub fn unused_rules(&self, findings: &[&Finding<'_>]) -> Vec<&IgnoreRule> {
+      let today = Timestamp::now().to_zoned(TimeZone::UTC).date();
+
+      self
+         .ignore
+         .iter()
+         .filter(|rule| {
+            rule.until.is_none_or(|until| today < until)
+               && !findings.iter().any(|finding| rule.matches(finding, today))
+         })
+         .collect()
    }
 }
