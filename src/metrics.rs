@@ -18,13 +18,15 @@ use crate::{advisory::Cvss, matching::Finding, output::Report};
 
 /// Deduplicated state for one package vulnerability.
 #[derive(Default)]
-struct Aggregate {
+struct Aggregate<'report> {
    /// Highest valid CVSS score reported for the finding.
    score: Option<f64>,
    /// Whether any derivation marks the finding as known exploited.
    known_exploited: bool,
    /// Whether some derivation's finding rests on more than distribution packages.
    upstream: bool,
+   /// Earliest release the evidence names as fixed.
+   fixed_in: Option<&'report str>,
 }
 
 /// Severity labels used by aggregate finding metrics, most severe first.
@@ -165,6 +167,7 @@ impl Metrics {
                "severity",
                "known_exploited",
                "distribution_only",
+               "fixed_in",
             ],
          )?,
          vulnerability_score: GaugeVec::new(
@@ -267,6 +270,7 @@ impl Metrics {
 
          aggregate.known_exploited |= finding.known_exploited;
          aggregate.upstream |= !finding.distribution_only();
+         aggregate.fixed_in = aggregate.fixed_in.or_else(|| finding.fixed_in());
       }
 
       let mut severity_counts = BTreeMap::<(Severity, bool), usize>::new();
@@ -294,6 +298,7 @@ impl Metrics {
                   "false"
                },
                distribution_only,
+               aggregate.fixed_in.unwrap_or_default(),
             ])
             .set(1);
 

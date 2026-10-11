@@ -720,6 +720,35 @@ fn numbered_release_order<'text>(left: &'text str, right: &'text str) -> Option<
    }
 }
 
+/// The earliest boundary past the installed version, which names the first
+/// release carrying the fix.
+pub fn earliest_fix<'text, Boundaries>(
+   installed: &str,
+   boundaries: Boundaries,
+) -> Option<&'text str>
+where
+   Boundaries: IntoIterator<Item = &'text str>,
+{
+   let current = Scheme::Custom.version(installed);
+
+   boundaries
+      .into_iter()
+      .filter(|boundary| {
+         Scheme::Custom.version(boundary).partial_cmp(&current) == Some(Ordering::Greater)
+      })
+      .fold(None, |earliest, boundary| match earliest {
+         Some(kept)
+            if Scheme::Custom
+               .version(kept)
+               .partial_cmp(&Scheme::Custom.version(boundary))
+               != Some(Ordering::Greater) =>
+         {
+            Some(kept)
+         },
+         Some(_) | None => Some(boundary),
+      })
+}
+
 /// The numeric release before a suffix like `-rc5` or `p15`.
 fn leading_release(value: &str) -> Option<&str> {
    let (prefix, suffix) = split_release(value);

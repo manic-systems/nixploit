@@ -190,6 +190,10 @@ where
       write!(writer, "  CVSS {} {:.1}", score.version, score.base_score)?;
    }
 
+   if let Some(release) = finding.fixed_in() {
+      write!(writer, "  fixed in {release}")?;
+   }
+
    if finding.known_exploited {
       write!(writer, "  KEV")?;
    }

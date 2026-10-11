@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize, Serializer};
 use crate::{
    advisory::{
       AffectedProduct, AffectedSource, AffectedVersion, Analyst, CpeClaims, Cvss, Ecosystem,
-      Namespace, Vulnerability,
+      Namespace, Status, Vulnerability,
       cpe::{Conditions, Configuration, CpeMatch},
    },
    config::Config,
@@ -19,7 +19,7 @@ use crate::{
    inventory::{Package, VersionOrigin},
    kbuild::BuildScope,
    source::SourceUrl,
-   version::{CommitPolicy, Match, ProductKind},
+   version::{CommitPolicy, Match, ProductKind, earliest_fix},
 };
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -164,6 +164,49 @@ impl Evidence {
 }
 
 impl Finding<'_> {
+   /// The earliest release the affected evidence names as fixed.
+   pub fn fixed_in(&self) -> Option<&str> {
+      let boundaries = self
+         .evidence
+         .iter()
+         .filter(|entry| entry.bucket == Bucket::Affected)
+         .flat_map(|entry| -> Vec<&str> {
+            match entry.claim {
+               Claim::Cpe { ref criteria, .. } => criteria
+                  .end
+                  .excluding()
+                  .map(String::as_str)
+                  .into_iter()
+                  .collect(),
+               Claim::Cna { ref affected, .. } | Claim::Osv { ref affected, .. } => affected
+                  .versions
+                  .iter()
+                  .flat_map(|version| {
+                     let fixed_end = (version.status == Status::Affected)
+                        .then(|| version.upper.excluding())
+                        .flatten();
+                     let fixed_start = (version.status == Status::Unaffected
+                        && version.upper.endpoints().next().is_none())
+                     .then_some(&version.version);
+                     let fixed_changes = version
+                        .changes
+                        .iter()
+                        .filter(|change| change.status == Status::Unaffected)
+                        .map(|change| &change.at);
+
+                     fixed_end
+                        .into_iter()
+                        .chain(fixed_start)
+                        .chain(fixed_changes)
+                  })
+                  .map(String::as_str)
+                  .collect(),
+            }
+         });
+
+      earliest_fix(&self.package.version, boundaries)
+   }
+
    /// Whether only distribution packages, without upstream version data, back the finding.
    pub fn distribution_only(&self) -> bool {
       self
