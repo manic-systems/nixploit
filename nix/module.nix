@@ -249,7 +249,9 @@ in
       systemd.timers.nixploit = {
         description = "Schedule Nix vulnerability scans";
         wantedBy = [ "timers.target" ];
+        unitConfig.X-Job = "${jobConfig}";
         timerConfig = {
+          OnActiveSec = "2min";
           OnCalendar = cfg.calendar;
           Persistent = true;
           RandomizedDelaySec = "15m";

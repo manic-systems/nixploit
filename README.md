@@ -248,7 +248,8 @@ dumps from mirrors, and `settings` for the aliases and ignore rules above.
 `kbuild.enable` turns on the kernel configuration filter, and `history.enable`
 runs `nixploit history` before each scan. These options live under
 `services.nixploit`. The timer persists across reboots and adds up to 15
-minutes of jitter.
+minutes of jitter. It also scans a couple of minutes after boot and after any
+deploy that changes the scanner or its settings.
 
 Start a scan immediately with `sudo systemctl start nixploit`. The last completed
 report is saved at `/var/lib/nixploit/report.json`, readable by root and the
