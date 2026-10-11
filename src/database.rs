@@ -8,7 +8,7 @@ use std::{
 
 use lz4_flex::block::{compress_prepend_size, decompress_size_prepended, uncompressed_size};
 use misstep::{Report, Result, ResultExt as _, ensure};
-use pound::ValueEnum;
+use pound::{ArgValue as _, ValueEnum};
 use rusqlite::{
    Connection, OptionalExtension as _, Result as SqlResult, ToSql, Transaction, params,
    types::{FromSql, FromSqlResult, ToSqlOutput, ValueRef},
@@ -38,15 +38,6 @@ pub enum Provider {
 }
 
 impl Provider {
-   /// Returns the provider's storage label.
-   const fn as_str(self) -> &'static str {
-      match self {
-         Self::Nvd => "nvd",
-         Self::Vulncheck => "vulncheck",
-         Self::Osv => "osv",
-      }
-   }
-
    /// Selects the record layout this provider publishes.
    const fn format(self) -> Format {
       match self {
