@@ -722,11 +722,15 @@ fn numbered_release_order<'text>(left: &'text str, right: &'text str) -> Option<
 
 /// The numeric release before a suffix like `-rc5` or `p15`.
 fn leading_release(value: &str) -> Option<&str> {
-   let (release, suffix) = split_release(value);
+   let (prefix, suffix) = split_release(value);
+   let lettered = suffix.starts_with(|character: char| character.is_ascii_alphabetic());
+   let release = prefix
+      .strip_suffix('.')
+      .filter(|_| lettered)
+      .unwrap_or(prefix);
    let qualified = suffix.is_empty()
       || suffix.starts_with(['-', '_', '+', '~'])
-      || release.contains('.')
-         && suffix.starts_with(|character: char| character.is_ascii_alphabetic());
+      || release.contains('.') && lettered;
 
    (dotted(release) && qualified && !suffix.contains(char::is_whitespace)).then_some(release)
 }
@@ -795,7 +799,7 @@ impl CpeMatch {
          },
       };
       let bound_version = if update_restricted {
-         release.or_else(|| dotted(installed).then_some(installed))
+         release.or_else(|| leading_release(installed))
       } else {
          Some(installed)
       };
