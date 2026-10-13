@@ -77,6 +77,10 @@ struct Cli {
 #[derive(Parse)]
 enum Command {
    /// Scan the runtime closure using the imported database.
+   #[pound(after_help = "Examples:
+  nixploit scan --system
+  nixploit scan --json --prometheus-file metrics.prom ./result
+  nixploit scan --inventory inventory.json --package openssl@3.0.0")]
    Scan {
       /// Packages to inspect.
       #[pound(flatten)]
@@ -101,6 +105,10 @@ enum Command {
       kev_only: bool,
    },
    /// Download and index vulnerability feeds.
+   #[pound(after_help = "Examples:
+  nixploit update --provider nvd --from-year 2020 --mirror URL      years are NVD only
+  nixploit update --provider osv --ecosystem PyPI,npm --mirror URL  ecosystems are OSV only
+  nixploit update --provider vulncheck                              takes no --mirror")]
    Update {
       #[pound(long, default = "nvd")]
       /// Feed provider to update.
