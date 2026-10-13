@@ -78,24 +78,9 @@ struct Cli {
 enum Command {
    /// Scan the runtime closure using the imported database.
    Scan {
-      #[pound(positional, value_name = "PATH")]
-      /// Nix paths to scan.
-      paths: Vec<PathBuf>,
-      /// Include the running NixOS system.
-      #[pound(long)]
-      system: bool,
-      /// Include build dependencies.
-      #[pound(long, conflicts_with = "no_requisites")]
-      build_deps: bool,
-      /// Inspect only the named paths.
-      #[pound(short = 'R', long)]
-      no_requisites: bool,
-      /// Add a package without querying Nix.
-      #[pound(long, value_name = "NAME@VERSION")]
-      package: Vec<String>,
-      /// Read a saved nixploit inventory.
-      #[pound(long, value_name = "JSON")]
-      inventory: Option<PathBuf>,
+      /// Packages to inspect.
+      #[pound(flatten)]
+      inventory: InventoryArgs,
       #[pound(long, value_name = "TOML")]
       /// Configuration file to load.
       config: Option<PathBuf>,
@@ -136,24 +121,9 @@ enum Command {
    /// Clone or refresh the upstream repositories that can decide affected
    /// findings.
    History {
-      #[pound(positional, value_name = "PATH")]
-      /// Nix paths to scan.
-      paths: Vec<PathBuf>,
-      /// Include the running NixOS system.
-      #[pound(long)]
-      system: bool,
-      /// Include build dependencies.
-      #[pound(long, conflicts_with = "no_requisites")]
-      build_deps: bool,
-      /// Inspect only the named paths.
-      #[pound(short = 'R', long)]
-      no_requisites: bool,
-      /// Add a package without querying Nix.
-      #[pound(long, value_name = "NAME@VERSION")]
-      package: Vec<String>,
-      /// Read a saved nixploit inventory.
-      #[pound(long, value_name = "JSON")]
-      inventory: Option<PathBuf>,
+      /// Packages to inspect.
+      #[pound(flatten)]
+      inventory: InventoryArgs,
       #[pound(long, value_name = "TOML")]
       /// Configuration file to load.
       config: Option<PathBuf>,
@@ -169,24 +139,9 @@ enum Command {
    },
    /// Export package and patch metadata from Nix.
    Inventory {
-      #[pound(positional, value_name = "PATH")]
-      /// Nix paths to inspect.
-      paths: Vec<PathBuf>,
-      /// Include the running NixOS system.
-      #[pound(long)]
-      system: bool,
-      /// Include build dependencies.
-      #[pound(long, conflicts_with = "no_requisites")]
-      build_deps: bool,
-      /// Inspect only the named paths.
-      #[pound(short = 'R', long)]
-      no_requisites: bool,
-      /// Add a package without querying Nix.
-      #[pound(long, value_name = "NAME@VERSION")]
-      package: Vec<String>,
-      /// Read a saved nixploit inventory.
-      #[pound(long, value_name = "JSON")]
-      inventory: Option<PathBuf>,
+      /// Packages to inspect.
+      #[pound(flatten)]
+      inventory: InventoryArgs,
    },
    /// Show database coverage and feed check times.
    Stats,
@@ -283,11 +238,6 @@ fn parse_exit(error: &ParseError) -> ExitCode {
 }
 
 /// Executes one parsed command.
-#[expect(
-   clippy::too_many_lines,
-   reason = "pound supports neither flattened nor tuple subcommand arguments, so each arm \
-             destructures its own flags"
-)]
 fn run(cli: Cli) -> Result<ExitCode> {
    let command = cli
       .command
@@ -300,32 +250,11 @@ fn run(cli: Cli) -> Result<ExitCode> {
    let open_database = || Database::open(&cache()?);
 
    match command {
-      Command::Inventory {
-         paths,
-         system,
-         build_deps,
-         no_requisites,
-         package,
-         inventory,
-      } => {
-         let arguments = InventoryArgs {
-            paths,
-            system,
-            build_deps,
-            no_requisites,
-            package,
-            inventory,
-         };
-
-         write_json(&Inventory::try_from(&arguments)?)?;
+      Command::Inventory { inventory } => {
+         write_json(&Inventory::try_from(&inventory)?)?;
          Ok(ExitCode::SUCCESS)
       },
       Command::Scan {
-         paths,
-         system,
-         build_deps,
-         no_requisites,
-         package,
          inventory,
          config,
          json,
@@ -340,14 +269,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
             &database,
             &History::new(&cache()?),
             &ScanArgs {
-               inventory: InventoryArgs {
-                  paths,
-                  system,
-                  build_deps,
-                  no_requisites,
-                  package,
-                  inventory,
-               },
+               inventory,
                config,
                output: OutputArgs {
                   json,
@@ -382,28 +304,13 @@ fn run(cli: Cli) -> Result<ExitCode> {
          write_json(&database.stats()?)?;
          Ok(ExitCode::SUCCESS)
       },
-      Command::History {
-         paths,
-         system,
-         build_deps,
-         no_requisites,
-         package,
-         inventory,
-         config,
-      } => {
+      Command::History { inventory, config } => {
          let database = open_database()?;
 
          sync_history(
             &database,
             &History::new(&cache()?),
-            &InventoryArgs {
-               paths,
-               system,
-               build_deps,
-               no_requisites,
-               package,
-               inventory,
-            },
+            &inventory,
             config.as_deref(),
          )
       },
