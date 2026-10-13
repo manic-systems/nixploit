@@ -39,6 +39,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
+name = "caress"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28f77ddc5f5c464a8d23e20f9887a878d1e0f0ec996ec5f42e1dec4c1452e8ff"
+dependencies = [
+ "pound",
+]
+
+[[package]]
 name = "cc"
 version = "1.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -565,6 +574,7 @@ checksum = "78535bf5c8617e488ae09df837dd55c083781f496948e43c5a69504fc741e3c4"
 name = "nixploit"
 version = "0.1.0"
 dependencies = [
+ "caress",
  "flate2",
  "hmac-sha256",
  "jiff",

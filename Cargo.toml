@@ -8,6 +8,7 @@ license      = "EUPL-1.2"
 publish      = false
 
 [dependencies]
+caress      = "0.1.0"
 flate2      = "1.1.10"
 hmac-sha256 = "1.1.15"
 jiff        = { version = "0.2.37", default-features = false, features = [ "std" ] }
