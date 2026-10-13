@@ -7,6 +7,7 @@ use std::{
 };
 
 use misstep::{Report, Result};
+use pound::complete::{Candidate, Partial};
 use serde::{Deserialize, de::IgnoredAny};
 
 use crate::{
@@ -35,6 +36,14 @@ impl Dump {
       Self::Ecosystem(Ecosystem::Go),
       Self::Git,
    ];
+
+   /// Offers every dump name to shell completion.
+   pub fn complete(_partial: &Partial<'_, '_>, _typed: &str) -> Vec<Candidate> {
+      Self::ALL
+         .iter()
+         .map(|dump| Candidate::new(dump.to_string()))
+         .collect()
+   }
 }
 
 impl FromStr for Dump {
