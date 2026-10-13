@@ -230,6 +230,8 @@ struct OutputArgs {
 
 /// Parses arguments and maps scanner results to process exit codes.
 fn main() -> ExitCode {
+   caress::handle(Cli::SPEC);
+
    let raw_arguments = match raw_arguments() {
       Ok(arguments) => arguments,
       Err(error) => {

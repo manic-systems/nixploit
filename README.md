@@ -20,6 +20,10 @@ nix build
 The remaining examples assume `nixploit` is on your `PATH`. You can use
 `nix shell .` from the checkout to get a shell with it available.
 
+For shell completions, add `source <(COMPLETE=bash nixploit)` to your bash
+config or `COMPLETE=fish nixploit | source` to your fish config. Other shells
+are listed in the [caress docs](https://docs.rs/caress).
+
 The first update imports every NVD archive from 2002 through the current year.
 Unchanged archives are skipped on later updates. Use `--from-year` for a smaller
 download at the cost of older advisory coverage.
