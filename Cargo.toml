@@ -13,7 +13,7 @@ hmac-sha256 = "1.1.15"
 jiff        = { version = "0.2.37", default-features = false, features = [ "std" ] }
 mimalloc    = "0.1.52"
 misstep     = { version = "0.3.0", features = [ "pretty" ] }
-pound       = "0.3.0"
+pound       = "0.4.2"
 prometheus  = { version = "0.14.0", default-features = false }
 rusqlite    = { version = "0.40.2", features = [ "bundled" ] }
 semver      = "1.0.28"

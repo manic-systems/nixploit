@@ -45,7 +45,7 @@ use std::{
 use jiff::Timestamp;
 use mimalloc::MiMalloc;
 use misstep::{OptionExt as _, Report as ErrorReport, Result, ensure};
-use pound::{Error as ParseError, Parse};
+use pound::{Error as ParseError, Parse, Term};
 
 use crate::{
    config::Config,
@@ -268,9 +268,9 @@ fn raw_arguments() -> Result<Vec<String>> {
 /// Renders a parser outcome and returns its process status.
 fn parse_exit(error: &ParseError) -> ExitCode {
    let written = if error.is_exit() {
-      writeln!(io::stdout().lock(), "{}", error.render())
+      writeln!(io::stdout().lock(), "{}", error.render(Term::stdout()))
    } else {
-      writeln!(io::stderr().lock(), "{}", error.render())
+      writeln!(io::stderr().lock(), "{}", error.render(Term::stderr()))
    };
 
    if written.is_err() || !error.is_exit() {
