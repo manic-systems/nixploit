@@ -63,14 +63,14 @@ static ALLOCATOR: MiMalloc = MiMalloc;
 
 /// Scan Nix packages against CPE and CNA vulnerability data.
 #[derive(Parse)]
-#[pound(name = "nixploit")]
+#[pound(name = "nixploit", help_if_empty)]
 struct Cli {
    /// Use this cache directory.
    #[pound(long, global, value_name = "DIRECTORY")]
    cache_dir: Option<PathBuf>,
    #[pound(subcommand)]
    /// Operation to perform.
-   command: Option<Command>,
+   command: Command,
 }
 
 /// Available scanner operations.
@@ -198,9 +198,6 @@ fn main() -> ExitCode {
 
 /// Executes one parsed command.
 fn run(cli: Cli) -> Result<ExitCode> {
-   let command = cli
-      .command
-      .context("A command is required. Use --help to list commands")?;
    let cache = || {
       cli.cache_dir
          .as_deref()
@@ -208,7 +205,7 @@ fn run(cli: Cli) -> Result<ExitCode> {
    };
    let open_database = || Database::open(&cache()?);
 
-   match command {
+   match cli.command {
       Command::Inventory { inventory } => {
          write_json(&Inventory::try_from(&inventory)?)?;
          Ok(ExitCode::SUCCESS)
