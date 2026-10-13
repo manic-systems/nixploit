@@ -44,8 +44,8 @@ use std::{
 
 use jiff::Timestamp;
 use mimalloc::MiMalloc;
-use misstep::{OptionExt as _, Report as ErrorReport, Result, ensure};
-use pound::{Error as ParseError, Parse, Term};
+use misstep::{OptionExt as _, Result, ensure};
+use pound::Parse;
 
 use crate::{
    config::Config,
@@ -187,53 +187,12 @@ struct OutputArgs {
 fn main() -> ExitCode {
    caress::handle(Cli::SPEC);
 
-   let raw_arguments = match raw_arguments() {
-      Ok(arguments) => arguments,
-      Err(error) => {
-         let _result = writeln!(io::stderr().lock(), "{error}");
-         return ExitCode::from(2);
-      },
-   };
-   let parsed = Cli::try_parse_from(raw_arguments.iter().map(String::as_str));
-
-   let cli = match parsed {
-      Ok(cli) => cli,
-      Err(error) => return parse_exit(&error),
-   };
-
-   match run(cli) {
+   match run(Cli::parse()) {
       Ok(code) => code,
       Err(error) => {
          let _result = writeln!(io::stderr().lock(), "{error}");
          ExitCode::from(2)
       },
-   }
-}
-
-/// Collects command-line arguments without replacing invalid UTF-8.
-fn raw_arguments() -> Result<Vec<String>> {
-   env::args_os()
-      .skip(1)
-      .map(|argument| {
-         argument
-            .into_string()
-            .map_err(|_argument| ErrorReport::msg("Command-line argument is not valid UTF-8"))
-      })
-      .collect()
-}
-
-/// Renders a parser outcome and returns its process status.
-fn parse_exit(error: &ParseError) -> ExitCode {
-   let written = if error.is_exit() {
-      writeln!(io::stdout().lock(), "{}", error.render(Term::stdout()))
-   } else {
-      writeln!(io::stderr().lock(), "{}", error.render(Term::stderr()))
-   };
-
-   if written.is_err() || !error.is_exit() {
-      ExitCode::from(2)
-   } else {
-      ExitCode::SUCCESS
    }
 }
 
