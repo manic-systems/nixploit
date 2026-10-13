@@ -114,7 +114,7 @@ enum Command {
       #[pound(long)]
       /// Last NVD archive year.
       through_year: Option<i32>,
-      #[pound(long, value_name = "ECOSYSTEM")]
+      #[pound(long, value_name = "ECOSYSTEM", delimiter = ',', complete = Dump::complete)]
       /// OSV ecosystem dump to refresh, every supported one when omitted.
       ecosystem: Vec<Dump>,
    },
