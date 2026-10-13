@@ -8,6 +8,7 @@ use std::{
 };
 
 use misstep::{OptionExt as _, Report, Result, ResultExt as _, bail, ensure};
+use pound::Parse;
 use serde::{Deserialize, Serialize, de::IgnoredAny};
 
 use crate::{advisory::Ecosystem, identifier::VulnerabilityId, source::SourceUrl};
@@ -38,18 +39,25 @@ impl VersionOrigin {
 }
 
 /// Package inventory selection from CLI arguments.
+#[derive(Parse)]
 pub struct InventoryArgs {
    /// Nix paths to inspect.
+   #[pound(positional, value_name = "PATH")]
    pub paths: Vec<PathBuf>,
-   /// Whether to include the running NixOS system.
+   /// Include the running NixOS system.
+   #[pound(long)]
    pub system: bool,
-   /// Whether to traverse build dependencies.
+   /// Include build dependencies.
+   #[pound(long, conflicts_with = "no_requisites")]
    pub build_deps: bool,
-   /// Whether to skip runtime requisites.
+   /// Inspect only the named paths.
+   #[pound(short = 'R', long)]
    pub no_requisites: bool,
-   /// Explicit package specifications.
+   /// Add a package without querying Nix.
+   #[pound(long, value_name = "NAME@VERSION")]
    pub package: Vec<String>,
-   /// Saved inventory file to read.
+   /// Read a saved nixploit inventory.
+   #[pound(long, value_name = "JSON")]
    pub inventory: Option<PathBuf>,
 }
 
