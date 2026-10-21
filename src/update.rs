@@ -19,15 +19,8 @@ use rustls_native_certs::load_native_certs;
 use serde::Deserialize;
 use tempfile::NamedTempFile;
 use ureq::{
-   Agent, Error as HttpError, Timeout,
+   Agent, Error as HttpError,
    tls::{Certificate, RootCerts, TlsConfig},
-   unversioned::{
-      resolver::DefaultResolver,
-      transport::{
-         Buffers, ConnectionDetails, Connector, DefaultConnector, NextTimeout, Transport,
-         time::Duration as TransportDuration,
-      },
-   },
 };
 
 use crate::{
@@ -410,66 +403,11 @@ fn client() -> Result<Agent> {
       .timeout_connect(Some(Duration::from_secs(30)))
       .timeout_send_request(Some(Duration::from_secs(30)))
       .timeout_recv_response(Some(Duration::from_secs(60)))
+      .timeout_per_read(Some(Duration::from_secs(60)))
       .user_agent(concat!("nixploit/", env!("CARGO_PKG_VERSION")))
       .build();
-   let connector = DefaultConnector::default().chain(IdleReadConnector);
 
-   Ok(Agent::with_parts(
-      config,
-      connector,
-      DefaultResolver::default(),
-   ))
-}
-
-/// Adds an idle read deadline after the selected TLS transport.
-#[derive(Debug)]
-struct IdleReadConnector;
-
-impl<Inner: Transport> Connector<Inner> for IdleReadConnector {
-   type Out = IdleReadTransport<Inner>;
-
-   fn connect(
-      &self,
-      _details: &ConnectionDetails,
-      chained: Option<Inner>,
-   ) -> Result<Option<Self::Out>, HttpError> {
-      Ok(chained.map(IdleReadTransport))
-   }
-}
-
-/// Preserves request deadlines while bounding each blocked body read.
-#[derive(Debug)]
-struct IdleReadTransport<Inner>(Inner);
-
-impl<Inner: Transport> Transport for IdleReadTransport<Inner> {
-   fn buffers(&mut self) -> &mut dyn Buffers {
-      self.0.buffers()
-   }
-
-   fn transmit_output(&mut self, amount: usize, timeout: NextTimeout) -> Result<(), HttpError> {
-      self.0.transmit_output(amount, timeout)
-   }
-
-   fn await_input(&mut self, mut timeout: NextTimeout) -> Result<bool, HttpError> {
-      let idle = TransportDuration::from_secs(60);
-
-      if idle < timeout.after {
-         timeout = NextTimeout {
-            after: idle,
-            reason: Timeout::RecvBody,
-         };
-      }
-
-      self.0.await_input(timeout)
-   }
-
-   fn is_open(&mut self) -> bool {
-      self.0.is_open()
-   }
-
-   fn is_tls(&self) -> bool {
-      self.0.is_tls()
-   }
+   Ok(Agent::new_with_config(config))
 }
 
 /// Store a bounded response body in a temporary file.

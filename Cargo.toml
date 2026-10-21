@@ -23,7 +23,7 @@ serde               = { version = "1.0.229", features = [ "derive" ] }
 serde_json          = { version = "1.0.151", features = [ "raw_value" ] }
 tempfile            = "3.27.0"
 toml                = "1.1.6"
-ureq                = { version = "3.4.2", default-features = false, features = [ "_ring", "json", "rustls-no-provider" ] }
+ureq                = { version = "3.5.0", default-features = false, features = [ "_ring", "json", "rustls-no-provider" ] }
 zip                 = { version = "9.0.5", default-features = false, features = [ "deflate-flate2" ] }
 
 [dependencies.lz4_flex]
