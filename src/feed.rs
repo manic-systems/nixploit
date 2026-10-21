@@ -12,7 +12,7 @@ use std::{
 };
 
 use flate2::read::MultiGzDecoder;
-use misstep::{Report, Result, ResultExt as _, ensure};
+use misstep::{Report, Result, ResultExt as _, bail, ensure, report};
 use serde::{Deserialize as _, de::DeserializeSeed as _};
 use serde_json::Deserializer as JsonDeserializer;
 use zip::ZipArchive;
@@ -205,9 +205,7 @@ where
          panicked |= handle.join().is_err();
       }
 
-      if panicked {
-         return Err(Report::msg("ZIP feed worker panicked"));
-      }
+      ensure!(!panicked, "ZIP feed worker panicked");
 
       result
    })
@@ -228,8 +226,9 @@ where
 {
    for index in (worker..archive.len()).step_by(worker_count) {
       let member = archive.by_index(index)?;
+      let name = member.name()?;
 
-      if member.is_dir() || !is_json_member(member.name()) {
+      if member.is_dir() || !is_json_member(&name) {
          send_worker_message(sender, WorkerMessage::Complete(None))?;
          continue;
       }
@@ -240,7 +239,7 @@ where
       let flush_batch = |records: &mut Vec<Item>| {
          send_worker_message(sender, WorkerMessage::Records(mem::take(records)))
       };
-      let is_json = Path::new(member.name())
+      let is_json = Path::new(name.as_ref())
          .extension()
          .is_some_and(|extension| extension.eq_ignore_ascii_case("json"));
       let page = {
@@ -307,7 +306,7 @@ fn consume_zip_members<Item>(
                break;
             },
             Ok(WorkerMessage::Failed(error)) => return Err(error),
-            Err(_) => return Err(Report::msg("ZIP feed worker stopped")),
+            Err(_) => bail!("ZIP feed worker stopped"),
          }
       }
    }
@@ -322,7 +321,7 @@ fn send_worker_message<Item>(
 ) -> Result<()> {
    sender
       .send(message)
-      .map_err(|_disconnected| Report::msg("ZIP feed consumer stopped"))
+      .map_err(|_disconnected| report!("ZIP feed consumer stopped"))
 }
 
 /// Reports whether a ZIP member contains JSON directly or through gzip.

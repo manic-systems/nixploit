@@ -14,7 +14,7 @@ use std::{
 use flate2::read::MultiGzDecoder;
 use hmac_sha256::Hash;
 use jiff::{Timestamp, tz::TimeZone};
-use misstep::{Report, Result, ResultExt as _, ensure, report};
+use misstep::{OptionExt as _, Report, Result, ResultExt as _, ensure, report};
 use rustls_native_certs::load_native_certs;
 use serde::Deserialize;
 use tempfile::NamedTempFile;
@@ -155,17 +155,20 @@ fn download_nvd(
    unpublished: bool,
    cancelled: &AtomicBool,
 ) -> Result<Option<(FeedState, Option<NamedTempFile>)>> {
-   let fetch = |suffix| match client.get(format!("{base}.{suffix}")).call() {
-      Err(HttpError::StatusCode(404)) if unpublished => {
-         writeln!(
-            stderr().lock(),
-            "Warning, NVD {year} is not published yet, skipping"
-         )?;
-         Ok(None)
-      },
-      response => response
-         .map(Some)
-         .with_context(|| format!("Fetching NVD {year} {suffix}")),
+   let fetch = |suffix| -> Result<_> {
+      match client.get(format!("{base}.{suffix}")).call() {
+         Err(HttpError::StatusCode(404)) if unpublished => {
+            writeln!(
+               stderr().lock(),
+               "Warning, NVD {year} is not published yet, skipping"
+            )?;
+            Ok(None)
+         },
+         response => response
+            .map(Some)
+            .with_context(|| format!("Fetching NVD {year} {suffix}"))
+            .erase(),
+      }
    };
    let mut retried = false;
 
@@ -177,7 +180,7 @@ fn download_nvd(
       let digest = metadata
          .lines()
          .find_map(|line| line.strip_prefix("sha256:"))
-         .ok_or_else(|| report!("NVD metadata for {} has no checksum", year))?
+         .with_context(|| format!("NVD metadata for {year} has no checksum"))?
          .trim()
          .parse::<Sha256>()
          .with_context(|| format!("Invalid NVD checksum for {year}"))?;
@@ -351,7 +354,7 @@ pub fn osv(database: &mut Database, mirror: &str, ecosystems: &[Dump]) -> Result
       };
       let digest = header("x-goog-generation")
          .or_else(|| header("etag"))
-         .ok_or_else(|| report!("OSV {} response has no generation or ETag", ecosystem))?;
+         .with_context(|| format!("OSV {ecosystem} response has no generation or ETag"))?;
       let checked_at = Timestamp::now().as_second();
 
       if let Some(state) = cached.filter(|state| state.digest == digest) {

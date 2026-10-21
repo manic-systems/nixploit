@@ -44,7 +44,7 @@ use std::{
 
 use jiff::Timestamp;
 use mimalloc::MiMalloc;
-use misstep::{OptionExt as _, Result, ensure};
+use misstep::{OptionExt as _, Result, ResultExt as _, ensure};
 use pound::Parse;
 
 use crate::{
@@ -110,16 +110,16 @@ enum Command {
   nixploit update --provider osv --ecosystem PyPI,npm --mirror URL  ecosystems are OSV only
   nixploit update --provider vulncheck                              takes no --mirror")]
    Update {
-      #[pound(long, default = "nvd")]
+      #[pound(long, default = Provider::Nvd)]
       /// Feed provider to update.
       provider: Provider,
       #[pound(long)]
       /// NVD archive or OSV bucket mirror base URL.
       mirror: Option<String>,
-      #[pound(long)]
+      #[pound(long, min = 2002)]
       /// First NVD archive year, 2002 when omitted.
       from_year: Option<i32>,
-      #[pound(long)]
+      #[pound(long, min = 2002)]
       /// Last NVD archive year.
       through_year: Option<i32>,
       #[pound(long, value_name = "ECOSYSTEM", delimiter = ',', complete = Dump::complete)]
@@ -141,7 +141,7 @@ enum Command {
       #[pound(positional, value_name = "FILE", min_values = 1)]
       /// Feed files to import.
       files: Vec<PathBuf>,
-      #[pound(long, default = "nvd")]
+      #[pound(long, default = Provider::Nvd)]
       /// Provider represented by the files.
       provider: Provider,
    },
@@ -192,13 +192,18 @@ struct OutputArgs {
 }
 
 /// Parses arguments and maps scanner results to process exit codes.
+#[expect(
+   clippy::use_debug,
+   reason = "The pretty Debug form of a report is its multi-section rendering"
+)]
 fn main() -> ExitCode {
    caress::handle(Cli::SPEC);
+   misstep::install_panic_hook();
 
    match run(Cli::parse()) {
       Ok(code) => code,
       Err(error) => {
-         let _result = writeln!(io::stderr().lock(), "{error}");
+         let _result = writeln!(io::stderr().lock(), "Error: {error:?}");
          ExitCode::from(2)
       },
    }
@@ -345,7 +350,8 @@ fn import_files(database: &mut Database, files: Vec<PathBuf>, provider: Provider
    let name = format!("{provider}/import");
 
    for path in files {
-      let canonical = fs::canonicalize(&path)?;
+      let canonical =
+         fs::canonicalize(&path).with_context(|| format!("Resolving {}", path.display()))?;
       let records = database.import(&canonical, provider, &name)?;
       ensure!(
          records > 0,
@@ -512,7 +518,8 @@ fn scan(database: &Database, history: &History, arguments: &ScanArgs) -> Result<
    }
 
    if let Some(path) = arguments.output.prometheus_file.as_deref() {
-      metrics::write(&report, path)?;
+      metrics::write(&report, path)
+         .with_context(|| format!("Writing metrics to {}", path.display()))?;
    }
 
    Ok(exit_status)

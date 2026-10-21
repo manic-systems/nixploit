@@ -48,7 +48,7 @@ pub struct InventoryArgs {
    #[pound(long)]
    pub system: bool,
    /// Include build dependencies.
-   #[pound(long, conflicts_with = "no_requisites")]
+   #[pound(long, conflicts_with = no_requisites)]
    pub build_deps: bool,
    /// Inspect only the named paths.
    #[pound(short = 'R', long)]
@@ -124,7 +124,10 @@ impl TryFrom<&InventoryArgs> for Inventory {
    /// Collects packages from explicit entries, files, and Nix paths.
    fn try_from(arguments: &InventoryArgs) -> Result<Self> {
       let mut inventory = if let Some(path) = arguments.inventory.as_ref() {
-         serde_json::from_slice::<Self>(&fs::read(path)?)?
+         let inventory = fs::read(path).with_context(|| format!("Reading {}", path.display()))?;
+
+         serde_json::from_slice::<Self>(&inventory)
+            .with_context(|| format!("Parsing the inventory {}", path.display()))?
       } else {
          Self::default()
       };
@@ -153,7 +156,7 @@ impl TryFrom<&InventoryArgs> for Inventory {
          .map(|path| {
             fs::canonicalize(path).with_context(|| format!("Resolving {}", path.display()))
          })
-         .collect::<Result<BTreeSet<_>>>()?;
+         .collect::<Result<BTreeSet<_>, _>>()?;
 
       if arguments.system
          || (roots.is_empty() && arguments.inventory.is_none() && arguments.package.is_empty())

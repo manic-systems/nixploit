@@ -58,8 +58,6 @@ impl FromStr for Dump {
    }
 }
 
-pound::from_str!(Dump);
-
 impl Display for Dump {
    #[expect(
       clippy::renamed_function_params,

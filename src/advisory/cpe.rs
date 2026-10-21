@@ -6,7 +6,7 @@ use std::{
    str::FromStr,
 };
 
-use misstep::{Report, Result, ensure};
+use misstep::{Report, Result, ensure, report};
 use serde::{
    Deserialize, Deserializer, Serialize, Serializer, de::Error as _, ser::SerializeStruct as _,
 };
@@ -388,7 +388,7 @@ impl FromStr for Cpe {
 
    /// Parse CPE 2.3 formatted string criteria.
    fn from_str(criteria: &str) -> Result<Self, Report> {
-      let malformed = |reason: &str| Report::msg(format!("Malformed CPE {criteria} ({reason})"));
+      let malformed = |reason: &str| report!("Malformed CPE {criteria} ({reason})");
       let mut fields = Vec::with_capacity(13);
       let mut field = String::new();
       let mut escaped = false;

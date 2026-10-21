@@ -226,9 +226,12 @@ pub struct FeedState {
 impl Database {
    /// Opens or creates an advisory database.
    pub fn open(directory: &Path) -> Result<Self> {
-      fs::create_dir_all(directory)?;
+      fs::create_dir_all(directory)
+         .with_context(|| format!("Creating the cache directory {}", directory.display()))?;
 
-      let connection = Connection::open(directory.join("advisories.sqlite3"))?;
+      let path = directory.join("advisories.sqlite3");
+      let connection =
+         Connection::open(&path).with_context(|| format!("Opening {}", path.display()))?;
 
       connection.busy_timeout(Duration::from_secs(60))?;
       connection.execute_batch("PRAGMA journal_mode = WAL; PRAGMA cache_size = -65536;")?;

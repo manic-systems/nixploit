@@ -5,12 +5,12 @@ use std::{
    cell::RefCell,
    collections::{BTreeSet, HashMap},
    fs,
-   io::{Write as _, stderr},
+   io::{self, Write as _, stderr},
    path::{Path, PathBuf},
    process::{Command, Output, Stdio},
 };
 
-use misstep::{OptionExt as _, Result, ResultExt as _, ensure};
+use misstep::{OptionExt as _, Report, Result, ResultExt as _, ensure};
 
 use crate::{
    advisory::{CommitRange, CommitSource},
@@ -165,7 +165,7 @@ impl History {
          writeln!(stderr().lock(), "Cloning {repository}")?;
 
          if let Some(parent) = clone.parent() {
-            fs::create_dir_all(parent)?;
+            fs::create_dir_all(parent).with_context(|| format!("Creating {}", parent.display()))?;
          }
       }
 
@@ -375,7 +375,7 @@ fn git(clone: &Path) -> Command {
 }
 
 /// Runs a git command in a clone.
-fn run(clone: &Path, arguments: &[&str]) -> Result<Output> {
+fn run(clone: &Path, arguments: &[&str]) -> Result<Output, Report<io::Error>> {
    git(clone)
       .args(arguments)
       .output()

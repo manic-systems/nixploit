@@ -5,7 +5,7 @@ use std::{
    str::FromStr,
 };
 
-use misstep::Report;
+use misstep::{Report, ensure};
 use rusqlite::{
    Result as SqlResult, ToSql,
    types::{FromSql, FromSqlError, FromSqlResult, ToSqlOutput, ValueRef},
@@ -75,13 +75,8 @@ impl FromStr for VulnerabilityId {
          None => false,
       };
 
-      if valid {
-         Ok(Self(value.to_owned()))
-      } else {
-         Err(Report::msg(format!(
-            "Invalid vulnerability identifier {value}"
-         )))
-      }
+      ensure!(valid, "Invalid vulnerability identifier {value}");
+      Ok(Self(value.to_owned()))
    }
 }
 

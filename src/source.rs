@@ -5,7 +5,7 @@ use std::{
    str::FromStr,
 };
 
-use misstep::{Report, ensure};
+use misstep::{OptionExt as _, Report, bail, ensure};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
 
 use crate::identifier::NormalizedName;
@@ -43,7 +43,7 @@ impl FromStr for Collection {
          "rust" => Self::Rust,
          "go" => Self::Go,
          "wordpress" => Self::WordPress,
-         _ => return Err(Report::msg(format!("Unknown package collection {target}"))),
+         _ => bail!("Unknown package collection {target}"),
       })
    }
 }
@@ -170,7 +170,7 @@ impl FromStr for SourceUrl {
    fn from_str(text: &str) -> Result<Self, Report> {
       let (_scheme, location) = text
          .split_once("://")
-         .ok_or_else(|| Report::msg(format!("URL {text} has no scheme")))?;
+         .with_context(|| format!("URL {text} has no scheme"))?;
       let (host, path) = location.split_once('/').unwrap_or((location, ""));
 
       ensure!(

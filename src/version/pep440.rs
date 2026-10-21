@@ -2,7 +2,7 @@
 
 use std::str::FromStr;
 
-use misstep::Report;
+use misstep::{Report, report};
 
 /// A Python package version with PEP 440 ordering.
 #[derive(Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -65,7 +65,7 @@ impl FromStr for Pep440 {
    type Err = Report;
 
    fn from_str(value: &str) -> Result<Self, Report> {
-      let invalid = || Report::msg(format!("Invalid PEP 440 version {value}"));
+      let invalid = || report!("Invalid PEP 440 version {value}");
       let lowered = value.trim().to_ascii_lowercase();
       let body = lowered.strip_prefix('v').unwrap_or(&lowered);
       let (public, label) = body

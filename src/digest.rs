@@ -50,9 +50,10 @@ impl FromStr for Sha256 {
    type Err = Report;
 
    fn from_str(value: &str) -> Result<Self, Self::Err> {
-      if value.len() != 64 || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-         return Err(Report::msg("SHA-256 digest must be 64 ASCII hex digits"));
-      }
+      ensure!(
+         value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit()),
+         "SHA-256 digest must be 64 ASCII hex digits"
+      );
 
       let mut bytes = [0; 32];
       let (pairs, _remainder) = value.as_bytes().as_chunks::<2>();

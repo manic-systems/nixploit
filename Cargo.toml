@@ -8,13 +8,13 @@ license      = "EUPL-1.2"
 publish      = false
 
 [dependencies]
-caress              = "0.1.0"
+caress              = "0.3.0"
 flate2              = "1.1.10"
 hmac-sha256         = "1.1.15"
 jiff                = { version = "0.2.37", default-features = false, features = [ "std" ] }
 mimalloc            = "0.1.52"
-misstep             = { version = "0.3.0", features = [ "pretty" ] }
-pound               = "0.4.2"
+misstep             = { version = "0.4.1", features = [ "color", "location", "panic-hook" ] }
+pound               = "0.6.0"
 prometheus          = { version = "0.14.0", default-features = false }
 rusqlite            = "0.40.2"
 rustls-native-certs = "0.8.5"
@@ -24,7 +24,7 @@ serde_json          = { version = "1.0.151", features = [ "raw_value" ] }
 tempfile            = "3.27.0"
 toml                = "1.1.6"
 ureq                = { version = "3.4.2", default-features = false, features = [ "_ring", "json", "rustls-no-provider" ] }
-zip                 = { version = "8.6.0", default-features = false, features = [ "deflate-flate2" ] }
+zip                 = { version = "9.0.5", default-features = false, features = [ "deflate-flate2" ] }
 
 [dependencies.lz4_flex]
 default-features = false

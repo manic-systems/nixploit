@@ -14,7 +14,7 @@ use std::{
 };
 
 use jiff::{Timestamp, civil::DateTime, tz::Offset};
-use misstep::{Report, Result, ensure};
+use misstep::{OptionExt as _, Report, Result, ensure, report};
 use serde::{
    Deserialize, Deserializer, Serialize, Serializer, de::Error as _, ser::SerializeStruct as _,
 };
@@ -38,10 +38,10 @@ impl FromStr for AdvisoryTimestamp {
          Err(offset_error) => {
             let datetime =
                DateTime::strptime("%Y-%m-%dT%H:%M:%S%.f", value).map_err(|datetime_error| {
-                  Report::msg(format!(
+                  report!(
                      "Invalid advisory timestamp {value:?}, {offset_error}, \
                       offsetless parse also failed, {datetime_error}"
-                  ))
+                  )
                })?;
 
             Offset::UTC.to_timestamp(datetime)?
@@ -135,11 +135,9 @@ impl FromStr for Ecosystem {
       Self::ALL
          .into_iter()
          .find(|ecosystem| ecosystem.to_string() == value)
-         .ok_or_else(|| Report::msg(format!("Unsupported ecosystem {value}")))
+         .with_context(|| format!("Unsupported ecosystem {value}"))
    }
 }
-
-pound::from_str!(Ecosystem);
 
 impl Display for Ecosystem {
    #[expect(

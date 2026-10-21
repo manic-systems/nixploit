@@ -55,7 +55,7 @@ impl KernelBuild {
 
       BuildScope::load(&directory).map_err(|error| {
          DeserializerType::Error::custom(format!(
-            "Loading the kernel build {}: {error:?}",
+            "Loading the kernel build {}: {error}",
             directory.display()
          ))
       })
@@ -166,8 +166,9 @@ impl Config {
       let Some(path) = filter else {
          return Ok(Self::default());
       };
-      let config = toml::from_str::<Self>(&fs::read_to_string(path)?)
-         .with_context(|| format!("Reading {}", path.display()))?;
+      let text = fs::read_to_string(path).with_context(|| format!("Reading {}", path.display()))?;
+      let config =
+         toml::from_str::<Self>(&text).with_context(|| format!("Parsing {}", path.display()))?;
 
       for rule in &config.ignore {
          ensure!(
