@@ -15,10 +15,12 @@ use flate2::read::MultiGzDecoder;
 use hmac_sha256::Hash;
 use jiff::{Timestamp, tz::TimeZone};
 use misstep::{Report, Result, ResultExt as _, ensure, report};
+use rustls_native_certs::load_native_certs;
 use serde::Deserialize;
 use tempfile::NamedTempFile;
 use ureq::{
    Agent, Error as HttpError, Timeout,
+   tls::{Certificate, RootCerts, TlsConfig},
    unversioned::{
       resolver::DefaultResolver,
       transport::{
@@ -60,7 +62,7 @@ pub fn nvd(
       mirror.starts_with("https://") || mirror.starts_with("http://"),
       "Invalid mirror URL"
    );
-   let client = &client();
+   let client = &client()?;
    let cancelled = &AtomicBool::new(false);
 
    let mut pending = (first_year..=last_year)
@@ -223,7 +225,7 @@ pub fn vulncheck(database: &mut Database) -> Result<()> {
    let token = env::var("VULNCHECK_API_TOKEN")
       .context("Set VULNCHECK_API_TOKEN to download VulnCheck NVD++")?;
    ensure!(!token.trim().is_empty(), "VULNCHECK_API_TOKEN is empty");
-   let client = client();
+   let client = client()?;
    let endpoint = "https://api.vulncheck.com/v3/backup/nist-nvd2";
 
    let response = client
@@ -327,7 +329,7 @@ pub fn osv(database: &mut Database, mirror: &str, ecosystems: &[Dump]) -> Result
       "Invalid mirror URL"
    );
 
-   let client = client();
+   let client = client()?;
    let mut checked = Vec::new();
 
    for ecosystem in ecosystems {
@@ -379,8 +381,28 @@ pub fn osv(database: &mut Database, mirror: &str, ecosystems: &[Dump]) -> Result
 }
 
 /// Set deadlines for request setup while allowing large response bodies.
-fn client() -> Agent {
+fn client() -> Result<Agent> {
+   let loaded = load_native_certs();
+
+   for error in &loaded.errors {
+      writeln!(stderr().lock(), "Loading CA certificates: {error}")?;
+   }
+
+   ensure!(
+      !loaded.certs.is_empty(),
+      "No CA certificates found, set SSL_CERT_FILE to a PEM bundle"
+   );
+   let roots = loaded
+      .certs
+      .iter()
+      .map(|der| Certificate::from_der(der).to_owned())
+      .collect::<Vec<_>>();
+   let tls = TlsConfig::builder()
+      .root_certs(RootCerts::new_with_certs(&roots))
+      .build();
+
    let config = Agent::config_builder()
+      .tls_config(tls)
       .timeout_resolve(Some(Duration::from_secs(30)))
       .timeout_connect(Some(Duration::from_secs(30)))
       .timeout_send_request(Some(Duration::from_secs(30)))
@@ -389,7 +411,11 @@ fn client() -> Agent {
       .build();
    let connector = DefaultConnector::default().chain(IdleReadConnector);
 
-   Agent::with_parts(config, connector, DefaultResolver::default())
+   Ok(Agent::with_parts(
+      config,
+      connector,
+      DefaultResolver::default(),
+   ))
 }
 
 /// Adds an idle read deadline after the selected TLS transport.
