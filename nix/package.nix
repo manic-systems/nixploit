@@ -3,6 +3,7 @@
   rustPlatform,
   stdenv,
   buildPackages,
+  installShellFiles,
   pkg-config,
   sqlite,
 }:
@@ -18,6 +19,7 @@ rustPlatform.buildRustPackage {
   cargoLock.lockFile = ../Cargo.lock;
 
   nativeBuildInputs = [
+    installShellFiles
     pkg-config
   ]
   ++ lib.optionals hasWild [
@@ -26,6 +28,14 @@ rustPlatform.buildRustPackage {
   ];
 
   buildInputs = [ sqlite ];
+
+  postInstall = lib.optionalString (stdenv.buildPlatform.canExecute stdenv.hostPlatform) ''
+    installShellCompletion --cmd nixploit          \
+      --bash    <(COMPLETE=bash $out/bin/nixploit) \
+      --fish    <(COMPLETE=fish $out/bin/nixploit) \
+      --zsh     <(COMPLETE=zsh  $out/bin/nixploit) \
+      --nushell <(COMPLETE=nu   $out/bin/nixploit)
+  '';
 
   env = lib.optionalAttrs hasWild {
     RUSTFLAGS = "-Clinker=${clang}/bin/${clang.targetPrefix}clang -Clink-arg=--ld-path=wild";
