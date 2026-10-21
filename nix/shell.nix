@@ -5,8 +5,10 @@
   cargo,
   clang,
   clippy,
+  pkg-config,
   rustc,
   rustfmt,
+  sqlite,
   wild,
 }:
 let
@@ -19,6 +21,8 @@ mkShell {
     rustc
     rustfmt
     clippy
+    pkg-config
+    sqlite
   ]
   ++ lib.optionals hasWild [
     wild

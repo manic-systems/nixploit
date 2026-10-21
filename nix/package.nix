@@ -3,6 +3,8 @@
   rustPlatform,
   stdenv,
   buildPackages,
+  pkg-config,
+  sqlite,
 }:
 let
   inherit (buildPackages) clang wild;
@@ -15,10 +17,15 @@ rustPlatform.buildRustPackage {
   src = ../.;
   cargoLock.lockFile = ../Cargo.lock;
 
-  nativeBuildInputs = lib.optionals hasWild [
+  nativeBuildInputs = [
+    pkg-config
+  ]
+  ++ lib.optionals hasWild [
     wild
     clang
   ];
+
+  buildInputs = [ sqlite ];
 
   env = lib.optionalAttrs hasWild {
     RUSTFLAGS = "-Clinker=${clang}/bin/${clang.targetPrefix}clang -Clink-arg=--ld-path=wild";
