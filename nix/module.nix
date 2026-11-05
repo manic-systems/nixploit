@@ -223,6 +223,7 @@ in
           pkgs.coreutils
         ]
         ++ lib.optional cfg.history.enable pkgs.gitMinimal;
+        restartIfChanged = false;
         serviceConfig = {
           Type = "oneshot";
           User = "nixploit";
