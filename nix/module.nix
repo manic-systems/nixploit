@@ -40,7 +40,7 @@ let
 
   jobConfig = pkgs.writeText "nixploit-service.json" (
     builtins.toJSON {
-      scanner = lib.getExe cfg.package;
+      scanner = lib.getExe' cfg.package "nixploit";
       inherit textfileDirectory;
       history = cfg.history.enable;
       scanArguments = [
