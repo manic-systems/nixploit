@@ -20,10 +20,6 @@ nix build
 The remaining examples assume `nixploit` is on your `PATH`. You can use
 `nix shell .` from the checkout to get a shell with it available.
 
-For shell completions, add `source <(COMPLETE=bash nixploit)` to your bash
-config or `COMPLETE=fish nixploit | source` to your fish config. Other shells
-are listed in the [caress docs](https://docs.rs/caress).
-
 The first update imports every NVD archive from 2002 through the current year.
 Unchanged archives are skipped on later updates. Use `--from-year` for a smaller
 download at the cost of older advisory coverage.
@@ -41,6 +37,19 @@ nixploit stats
 `stats` shows database coverage and feed check times. The cache lives in
 `$XDG_CACHE_HOME/nixploit`, or `~/.cache/nixploit` if unset. Pass `--cache-dir` to
 use a different directory.
+
+## Completions
+
+The Nix package installs completions for Bash, Zsh, Fish and Nushell. To set
+completions up by hand, source the script nixploit prints.
+
+| shell  | setup                                                            |
+|--------|------------------------------------------------------------------|
+| bash   | `source <(COMPLETE=bash nixploit)`                               |
+| zsh    | `COMPLETE=zsh nixploit > ~/.zfunc/_nixploit`, with it in `fpath` |
+| fish   | `COMPLETE=fish nixploit \| source`                               |
+| nu     | `COMPLETE=nu nixploit \| save nixploit.nu`, then `source` it     |
+| elvish | `eval (env COMPLETE=elvish nixploit \| slurp)`                   |
 
 ## Usage
 
