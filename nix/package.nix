@@ -29,13 +29,18 @@ rustPlatform.buildRustPackage {
 
   buildInputs = [ sqlite ];
 
-  postInstall = lib.optionalString (stdenv.buildPlatform.canExecute stdenv.hostPlatform) ''
-    installShellCompletion --cmd nixploit          \
-      --bash    <(COMPLETE=bash $out/bin/nixploit) \
-      --fish    <(COMPLETE=fish $out/bin/nixploit) \
-      --zsh     <(COMPLETE=zsh  $out/bin/nixploit) \
-      --nushell <(COMPLETE=nu   $out/bin/nixploit)
-  '';
+  postInstall = lib.optionalString (stdenv.hostPlatform.emulatorAvailable buildPackages) (
+    let
+      nixploit = "${stdenv.hostPlatform.emulator buildPackages} $out/bin/nixploit";
+    in
+    ''
+      installShellCompletion --cmd nixploit \
+        --bash    <(COMPLETE=bash ${nixploit}) \
+        --zsh     <(COMPLETE=zsh  ${nixploit}) \
+        --fish    <(COMPLETE=fish ${nixploit}) \
+        --nushell <(COMPLETE=nu   ${nixploit})
+    ''
+  );
 
   env = lib.optionalAttrs hasWild {
     RUSTFLAGS = "-Clinker=${clang}/bin/${clang.targetPrefix}clang -Clink-arg=--ld-path=wild";
